@@ -13,6 +13,14 @@ class CalendarEventsTests(unittest.TestCase):
     def test_requires_https_for_private_feed(self):
         self.assertTrue(module.is_secure_ical_url("https://calendar.example.test/private.ics"))
         self.assertFalse(module.is_secure_ical_url("http://calendar.example.test/private.ics"))
+        self.assertFalse(module.is_secure_ical_url("https://"))
+
+    def test_rejects_https_to_http_redirect(self):
+        request = module.Request("https://calendar.example.test/private.ics")
+        with self.assertRaises(ValueError):
+            module.HTTPSOnlyRedirectHandler().redirect_request(
+                request, None, 302, "Found", {}, "http://calendar.example.test/private.ics"
+            )
 
     def test_unfolds_long_ical_lines(self):
         text = "SUMMARY:This is a long\\n\n folded title"

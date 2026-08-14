@@ -35,13 +35,26 @@ OMARCHY_CALENDAR_ICS_URL="$ical_url" OMARCHY_CALENDAR_CONFIG_PATH="$CONFIG_PATH"
 import json
 import os
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 url = os.environ["OMARCHY_CALENDAR_ICS_URL"].strip()
 path = Path(os.environ["OMARCHY_CALENDAR_CONFIG_PATH"])
+
+def is_secure_url(value):
+    parsed = urlsplit(value)
+    return parsed.scheme.lower() == "https" and bool(parsed.netloc)
+
+class HTTPSOnlyRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        if not is_secure_url(newurl):
+            raise ValueError("La URL redirige a una conexión no segura")
+        return super().redirect_request(request, fp, code, msg, headers, newurl)
+
 try:
     request = Request(url, headers={"User-Agent": "omarchy-calendar-agenda-setup/1.0"})
-    with urlopen(request, timeout=15) as response:
+    opener = build_opener(HTTPSOnlyRedirectHandler())
+    with opener.open(request, timeout=15) as response:
         sample = response.read(512_000).decode("utf-8-sig", errors="replace")
 except Exception:
     raise SystemExit("No se pudo leer la URL. Revisa que sea una URL iCalendar privada válida.")

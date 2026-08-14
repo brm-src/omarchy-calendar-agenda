@@ -9,7 +9,8 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
-from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 from zoneinfo import ZoneInfo
 
 CONFIG_PATH = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy" / "calendar-widget" / "config.json"
@@ -176,7 +177,15 @@ def load_config() -> str:
 
 
 def is_secure_ical_url(url: str) -> bool:
-    return url.lower().startswith("https://")
+    parsed = urlsplit(url)
+    return parsed.scheme.lower() == "https" and bool(parsed.netloc)
+
+
+class HTTPSOnlyRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not is_secure_ical_url(newurl):
+            raise ValueError("La URL iCalendar redirige a una conexión no segura")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def main() -> None:
@@ -188,7 +197,8 @@ def main() -> None:
         json_out(error="La URL iCalendar debe comenzar con https://", events=[])
         return
     request = Request(url, headers={"User-Agent": "omarchy-calendar-agenda/1.0"})
-    with urlopen(request, timeout=15) as response:
+    opener = build_opener(HTTPSOnlyRedirectHandler())
+    with opener.open(request, timeout=15) as response:
         calendar = response.read(2_000_000).decode("utf-8-sig", errors="replace")
     now = datetime.now().astimezone()
     events = parse_events(calendar, now, now.date() + timedelta(days=HORIZON_DAYS))
