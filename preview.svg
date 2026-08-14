@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Desktop Agenda for Omarchy</title>
+  <desc id="desc">A dark Omarchy desktop with a top bar and an agenda card showing upcoming events.</desc>
+  <defs>
+    <linearGradient id="desk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17191d"/>
+      <stop offset="1" stop-color="#090a0d"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f04b9a" stop-opacity=".25"/>
+      <stop offset="1" stop-color="#7a4cff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#000" flood-opacity=".55"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#desk)"/>
+  <circle cx="180" cy="180" r="420" fill="url(#glow)"/>
+  <path d="M0 760 C350 620 530 860 840 720 S1330 560 1600 730 V1000 H0Z" fill="#111318" opacity=".75"/>
+  <rect x="0" y="0" width="1600" height="64" fill="#0b0c0f" opacity=".96"/>
+  <text x="42" y="40" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="22" font-weight="700">omarchy</text>
+  <text x="1410" y="40" fill="#aaa5ac" font-family="Inter, sans-serif" font-size="18">Tue 10:42</text>
+  <rect x="1100" y="112" width="430" height="574" rx="22" fill="#17191d" stroke="#f04b9a" stroke-opacity=".8" filter="url(#shadow)"/>
+  <text x="1135" y="160" fill="#f04b9a" font-family="Inter, sans-serif" font-size="18" font-weight="800" letter-spacing="4">AGENDA</text>
+  <line x1="1135" y1="184" x2="1495" y2="184" stroke="#f04b9a" stroke-opacity=".45"/>
+  <text x="1135" y="218" fill="#7f7a82" font-family="Inter, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">FECHA</text>
+  <text x="1220" y="218" fill="#7f7a82" font-family="Inter, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">HORA</text>
+  <text x="1300" y="218" fill="#7f7a82" font-family="Inter, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">EVENTO</text>
+  <g font-family="Inter, sans-serif">
+    <rect x="1135" y="238" width="360" height="58" rx="12" fill="#f3f0f2" fill-opacity=".06"/>
+    <text x="1152" y="273" fill="#f04b9a" font-size="15" font-weight="800">HOY</text>
+    <text x="1240" y="273" fill="#f3f0f2" font-size="16" font-weight="700">11:30</text>
+    <text x="1320" y="273" fill="#f3f0f2" font-size="15">Reunión de proyecto</text>
+    <rect x="1135" y="308" width="360" height="58" rx="12" fill="#f3f0f2" fill-opacity=".06"/>
+    <text x="1152" y="343" fill="#f04b9a" font-size="15" font-weight="800">HOY</text>
+    <text x="1240" y="343" fill="#f3f0f2" font-size="16" font-weight="700">15:00</text>
+    <text x="1320" y="343" fill="#f3f0f2" font-size="15">Defensa de tesis</text>
+    <rect x="1135" y="378" width="360" height="58" rx="12" fill="#f3f0f2" fill-opacity=".06"/>
+    <text x="1152" y="413" fill="#f04b9a" font-size="15" font-weight="800">MAÑANA</text>
+    <text x="1240" y="413" fill="#f3f0f2" font-size="16" font-weight="700">09:00</text>
+    <text x="1320" y="413" fill="#f3f0f2" font-size="15">Planificación semanal</text>
+    <rect x="1135" y="448" width="360" height="58" rx="12" fill="#f3f0f2" fill-opacity=".06"/>
+    <text x="1152" y="483" fill="#f04b9a" font-size="15" font-weight="800">JUE 21</text>
+    <text x="1240" y="483" fill="#f3f0f2" font-size="16" font-weight="700">18:30</text>
+    <text x="1320" y="483" fill="#f3f0f2" font-size="15">Conversación</text>
+  </g>
+  <text x="1135" y="620" fill="#7f7a82" font-family="Inter, sans-serif" font-size="13">Private iCalendar • no API keys</text>
+  <text x="72" y="820" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="64" font-weight="800">Desktop Agenda</text>
+  <text x="77" y="872" fill="#aaa5ac" font-family="Inter, sans-serif" font-size="26">Your next events, quietly visible.</text>
+</svg>

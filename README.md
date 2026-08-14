@@ -1,108 +1,84 @@
-# Desktop Agenda for Omarchy
+# Agenda de escritorio para Omarchy
 
-A small, quiet desktop overlay for Omarchy Quattro. It shows the next events from a private iCalendar (`.ics`) feed in the top-right corner, below the bar.
+[English](README.en.md)
 
-It is intentionally source-agnostic: Google Calendar, Nextcloud, Fastmail, a self-hosted calendar, or any service that exposes an iCalendar URL can provide the feed.
+Un widget discreto para Omarchy Quattro que muestra las próximas reuniones en una tarjeta sobre el escritorio, debajo de la barra.
 
-## Why there are no API keys
+![Vista previa de Desktop Agenda](preview.png)
 
-The plugin does not use a vendor API, OAuth client, or shared credential. Each user keeps their own private iCalendar URL in a local file. The URL is a bearer secret: do not publish it or paste it into issue reports.
+Funciona con cualquier servicio que entregue un calendario iCalendar (`.ics`): Google Calendar, Nextcloud, Fastmail, calendarios propios y otros. No depende de una API específica.
 
-## Requirements
+## Instalación rápida
 
-- Omarchy Quattro with Quickshell
-- Python 3.9+
-- A private iCalendar URL
-
-No Python packages are required.
-
-## Install
+Requiere Omarchy Quattro, Quickshell, Python 3.9 o superior y una URL privada `.ics`.
 
 ```bash
 omarchy plugin add https://github.com/brm-src/omarchy-calendar-agenda.git --enable --yes
+bash ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/setup.sh
 ```
 
-Then reload the shell:
+El segundo comando te pide la URL privada, comprueba que realmente sea un calendario iCalendar, la guarda localmente con permisos `600` y reinicia el shell de Omarchy. No instala paquetes, no usa `sudo` y no ejecuta código descargado desde otra URL.
+
+Si prefieres revisar el código antes de activarlo, omite `--enable` en el primer comando y ejecuta después:
 
 ```bash
-omarchy restart shell
+omarchy plugin enable io.github.brm-src.calendar-agenda
 ```
 
-The plugin starts disabled until you explicitly enable it through the install command. Review the repository before enabling it; Omarchy plugins run unsandboxed inside the shell process.
+## Uso
 
-## Configure
+La tarjeta aparece arriba a la derecha y se actualiza cada cinco minutos. Muestra hasta ocho eventos dentro de los próximos 30 días.
 
-Create the local configuration directory and file:
+- Las reuniones de hoy aparecen como `HOY`.
+- Las del día siguiente aparecen como `MAÑANA`.
+- Los eventos se ordenan por hora.
+- Al hacer clic se abre el enlace del evento con el navegador predeterminado.
+- Los enlaces de Google Meet y Zoom dentro de la descripción tienen prioridad.
 
-```bash
-mkdir -p ~/.config/omarchy/calendar-widget
-chmod 700 ~/.config/omarchy/calendar-widget
-printf '%s\n' '{"icalUrl":"https://calendar.example/private/basic.ics"}' > ~/.config/omarchy/calendar-widget/config.json
-chmod 600 ~/.config/omarchy/calendar-widget/config.json
+## Privacidad: por qué no hay API keys
+
+El plugin no usa API de proveedor, OAuth, client secrets ni una credencial compartida. Cada persona configura su propia URL privada iCalendar en:
+
+```text
+~/.config/omarchy/calendar-widget/config.json
 ```
 
-Replace the example URL with your own private `.ics` URL. The plugin refreshes every five minutes and displays up to eight events within the next 30 days.
+La URL privada funciona como una contraseña: quien la tenga puede leer el calendario. No la publiques ni la pegues en issues, capturas o logs.
 
-You can also test without writing a config file:
+El repositorio no contiene credenciales y el plugin no envía los eventos a ningún servidor intermedio. La descarga ocurre directamente desde el equipo local.
+
+## Solución de problemas
+
+Si la tarjeta dice que falta configurar el calendario:
 
 ```bash
-OMARCHY_CALENDAR_ICS_URL='https://calendar.example/private/basic.ics' \\
-  python3 ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/calendar_events.py
+bash ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/setup.sh
 ```
 
-Click an event to open its URL with the desktop default browser. Google Meet and Zoom links found in the event description are preferred.
-
-## Security
-
-- The repository contains no credentials.
-- `config.json` is user-local and should remain mode `600`.
-- Private iCalendar URLs grant access to calendar data. Treat them like passwords.
-- The feed is fetched directly by the local machine; no third-party proxy is involved.
-- Do not use a public calendar URL for private events.
-
-## Troubleshooting
-
-If the card says the calendar is not configured, check the path and permissions:
+Para comprobar el archivo local y sus permisos:
 
 ```bash
-cat ~/.config/omarchy/calendar-widget/config.json
 stat -c '%a %n' ~/.config/omarchy/calendar-widget/config.json
 ```
 
-If the card cannot update, fetch the feed directly:
+La salida esperada es `600`.
+
+## Desinstalación
+
+Este comando elimina el plugin y su configuración local, pero no toca tu cuenta ni borra eventos remotos:
 
 ```bash
-curl -fsSL --max-time 15 'https://calendar.example/private/basic.ics' | head
+bash ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/setup.sh --remove
 ```
 
-The plugin intentionally hides the actual URL from error messages.
-
-## Uninstall
-
-```bash
-omarchy plugin remove io.github.brm-src.calendar-agenda --yes
-rm -f ~/.config/omarchy/calendar-widget/config.json
-rmdir ~/.config/omarchy/calendar-widget 2>/dev/null || true
-omarchy restart shell
-```
-
-The uninstall command does not touch any calendar account or remote data.
-
-## Development
-
-Run the parser tests:
+## Desarrollo y validación
 
 ```bash
 python3 -m unittest discover -s tests -v
-```
-
-Validate the Omarchy manifest and QML on a machine with Omarchy installed:
-
-```bash
 omarchy plugin validate .
 qmllint -I "$OMARCHY_PATH/shell" CalendarAgenda.qml
 ```
 
-## License
+## Licencia
 
-MIT. See [LICENSE](LICENSE).
+MIT. Consulta [LICENSE](LICENSE).
