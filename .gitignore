@@ -1,0 +1,6 @@
+# Local calendar secrets and generated files
+config.json
+google-token.json
+*.secret
+__pycache__/
+.pytest_cache/
