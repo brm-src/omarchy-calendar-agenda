@@ -24,8 +24,8 @@ printf 'Desktop Agenda necesita la URL privada iCalendar (.ics).\n'
 printf 'No se guarda en el repositorio ni se envía a ningún servicio externo.\n\n'
 read -r -p 'URL privada iCalendar: ' ical_url
 
-if [[ ! "$ical_url" =~ ^https?:// ]]; then
-  printf 'Error: la URL debe comenzar con http:// o https://.\n' >&2
+if [[ ! "$ical_url" =~ ^https:// ]]; then
+  printf 'Error: la URL debe comenzar con https://.\n' >&2
   exit 1
 fi
 

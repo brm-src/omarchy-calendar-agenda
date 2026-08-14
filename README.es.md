@@ -10,14 +10,14 @@ Funciona con cualquier servicio que entregue un calendario iCalendar (`.ics`): G
 
 ## Instalación rápida
 
-Requiere Omarchy Quattro, Quickshell, Python 3.9 o superior y una URL privada `.ics`.
+Requiere Omarchy Quattro, Quickshell, Python 3.9 o superior y una URL privada `https://` `.ics`.
 
 ```bash
 omarchy plugin add https://github.com/brm-src/omarchy-calendar-agenda.git --enable --yes
 bash ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/setup.sh
 ```
 
-El segundo comando te pide la URL privada, comprueba que realmente sea un calendario iCalendar, la guarda localmente con permisos `600` y reinicia el shell de Omarchy. No instala paquetes ni ejecuta código descargado desde otra URL.
+El segundo comando te pide la URL privada HTTPS, comprueba que realmente sea un calendario iCalendar, la guarda localmente con permisos `600` y reinicia el shell de Omarchy. No instala paquetes ni ejecuta código descargado desde otra URL.
 
 Si prefieres revisar el código antes de activarlo, omite `--enable` en el primer comando y ejecuta después:
 
@@ -43,7 +43,7 @@ El plugin no usa API de proveedor, OAuth, client secrets ni una credencial compa
 ~/.config/omarchy/calendar-widget/config.json
 ```
 
-La URL privada funciona como una contraseña: quien la tenga puede leer el calendario. No la publiques ni la pegues en issues, capturas o logs.
+La URL privada funciona como una contraseña: quien la tenga puede leer el calendario. Usa HTTPS para que la URL no viaje en texto plano. No la publiques ni la pegues en issues, capturas o logs.
 
 El repositorio no contiene credenciales y el plugin no envía los eventos a ningún servidor intermedio. La descarga ocurre directamente desde el equipo local.
 

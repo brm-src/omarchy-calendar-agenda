@@ -10,14 +10,14 @@ It works with any service that exposes an iCalendar (`.ics`) URL: Google Calenda
 
 ## Quick install
 
-Requires Omarchy Quattro, Quickshell, Python 3.9+, and a private `.ics` URL.
+Requires Omarchy Quattro, Quickshell, Python 3.9+, and a private `https://` `.ics` URL.
 
 ```bash
 omarchy plugin add https://github.com/brm-src/omarchy-calendar-agenda.git --enable --yes
 bash ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/setup.sh
 ```
 
-The second command asks for the private URL, verifies that it is an iCalendar feed, stores it locally with mode `600`, and restarts the Omarchy shell. It installs no packages and does not execute code downloaded from another URL.
+The second command asks for the private HTTPS URL, verifies that it is an iCalendar feed, stores it locally with mode `600`, and restarts the Omarchy shell. It installs no packages and does not execute code downloaded from another URL.
 
 To review the source before enabling it, omit `--enable` in the first command and run:
 
@@ -43,7 +43,7 @@ The plugin uses no vendor API, OAuth client, client secret, or shared credential
 ~/.config/omarchy/calendar-widget/config.json
 ```
 
-A private calendar URL is a bearer secret: anyone who obtains it may read the calendar. Do not publish it or paste it into issues, screenshots, or logs.
+A private calendar URL is a bearer secret: anyone who obtains it may read the calendar. Use HTTPS so the URL is not sent in plaintext. Do not publish it or paste it into issues, screenshots, or logs.
 
 The repository contains no credentials and events are never sent through a third-party proxy. The local machine fetches the feed directly.
 

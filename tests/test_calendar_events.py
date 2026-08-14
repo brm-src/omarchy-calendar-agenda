@@ -10,6 +10,10 @@ spec.loader.exec_module(module)
 
 
 class CalendarEventsTests(unittest.TestCase):
+    def test_requires_https_for_private_feed(self):
+        self.assertTrue(module.is_secure_ical_url("https://calendar.example.test/private.ics"))
+        self.assertFalse(module.is_secure_ical_url("http://calendar.example.test/private.ics"))
+
     def test_unfolds_long_ical_lines(self):
         text = "SUMMARY:This is a long\\n\n folded title"
         self.assertEqual(module.unfold(text), ["SUMMARY:This is a long\\nfolded title"])

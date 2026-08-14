@@ -175,13 +175,17 @@ def load_config() -> str:
     return str(config.get("icalUrl") or config.get("ical_url") or config.get("url") or "").strip()
 
 
+def is_secure_ical_url(url: str) -> bool:
+    return url.lower().startswith("https://")
+
+
 def main() -> None:
     url = load_config()
     if not url:
         json_out(error=f"Configura tu URL privada iCalendar en {CONFIG_PATH}", events=[])
         return
-    if not url.startswith(("https://", "http://")):
-        json_out(error="La URL iCalendar debe comenzar con http:// o https://", events=[])
+    if not is_secure_ical_url(url):
+        json_out(error="La URL iCalendar debe comenzar con https://", events=[])
         return
     request = Request(url, headers={"User-Agent": "omarchy-calendar-agenda/1.0"})
     with urlopen(request, timeout=15) as response:

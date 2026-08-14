@@ -16,7 +16,7 @@ Item {
 
   function openEvent(url) {
     if (!url) return
-    Util.execDetached("xdg-open " + Util.shellQuote(url))
+    Quickshell.execDetached(["xdg-open", url])
   }
 
   function applyPayload(raw) {
@@ -141,6 +141,7 @@ Item {
                   width: parent.width - 60 - 42 - 10 - 10
                   anchors.verticalCenter: parent.verticalCenter
                   text: modelData.title
+                  textFormat: Text.PlainText
                   color: Color.foreground
                   font.family: Style.font.family
                   font.pixelSize: 12
@@ -162,6 +163,7 @@ Item {
           Text {
             visible: root.events.length === 0
             text: root.errorMessage !== "" ? root.errorMessage : "Sin eventos en los próximos 30 días"
+            textFormat: Text.PlainText
             color: Util.alpha(Color.foreground, 0.64)
             font.family: Style.font.family
             font.pixelSize: 12
