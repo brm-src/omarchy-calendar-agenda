@@ -10,8 +10,11 @@ if [[ "${1:-}" == "--remove" ]]; then
   rm -f "$CONFIG_PATH"
   rmdir "$CONFIG_DIR" 2>/dev/null || true
   if command -v omarchy >/dev/null 2>&1; then
-    omarchy plugin remove "$PLUGIN_ID" --yes
-    omarchy restart shell
+    if omarchy plugin remove "$PLUGIN_ID" --yes; then
+      omarchy restart shell
+    else
+      printf 'El plugin ya no estaba instalado; se limpió la configuración local.\n'
+    fi
   fi
   printf 'Desktop Agenda eliminado.\n'
   exit 0
