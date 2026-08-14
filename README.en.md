@@ -17,7 +17,7 @@ omarchy plugin add https://github.com/brm-src/omarchy-calendar-agenda.git --enab
 bash ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/setup.sh
 ```
 
-The second command asks for the private URL, verifies that it is an iCalendar feed, stores it locally with mode `600`, and restarts the Omarchy shell. It installs no packages, uses no `sudo`, and does not execute code downloaded from another URL.
+The second command asks for the private URL, verifies that it is an iCalendar feed, stores it locally with mode `600`, and restarts the Omarchy shell. It installs no packages and does not execute code downloaded from another URL.
 
 To review the source before enabling it, omit `--enable` in the first command and run:
 

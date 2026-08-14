@@ -17,7 +17,7 @@ omarchy plugin add https://github.com/brm-src/omarchy-calendar-agenda.git --enab
 bash ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/setup.sh
 ```
 
-El segundo comando te pide la URL privada, comprueba que realmente sea un calendario iCalendar, la guarda localmente con permisos `600` y reinicia el shell de Omarchy. No instala paquetes, no usa `sudo` y no ejecuta código descargado desde otra URL.
+El segundo comando te pide la URL privada, comprueba que realmente sea un calendario iCalendar, la guarda localmente con permisos `600` y reinicia el shell de Omarchy. No instala paquetes ni ejecuta código descargado desde otra URL.
 
 Si prefieres revisar el código antes de activarlo, omite `--enable` en el primer comando y ejecuta después:
 
