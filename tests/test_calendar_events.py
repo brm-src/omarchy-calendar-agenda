@@ -1,8 +1,11 @@
 import importlib.util
 import io
+import json
+import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 MODULE_PATH = Path(__file__).parents[1] / "calendar_events.py"
 spec = importlib.util.spec_from_file_location("calendar_events", MODULE_PATH)
@@ -32,14 +35,14 @@ class CalendarEventsTests(unittest.TestCase):
         ics = """BEGIN:VCALENDAR
 BEGIN:VEVENT
 DTSTART:20260814T120000Z
-SUMMARY:Reunión\\, importante
+SUMMARY:Team sync\\, important
 URL:https://example.com/event
 END:VEVENT
 END:VCALENDAR
 """
         events = module.parse_events(ics, now, now.date())
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0]["title"], "Reunión, importante")
+        self.assertEqual(events[0]["title"], "Team sync, important")
         self.assertEqual(events[0]["time"], "08:00")
         self.assertEqual(events[0]["url"], "https://example.com/event")
         self.assertEqual(events[0]["date"], "2026-08-14")
@@ -50,7 +53,7 @@ END:VCALENDAR
         ics = """BEGIN:VCALENDAR
 BEGIN:VEVENT
 DTSTART;VALUE=DATE:20260815
-SUMMARY:Día de trabajo
+SUMMARY:Work day
 END:VEVENT
 END:VCALENDAR
 """
@@ -63,27 +66,27 @@ END:VCALENDAR
         ics = """BEGIN:VCALENDAR
 BEGIN:VEVENT
 DTSTART:20260814T120000Z
-SUMMARY:Trabajo
+SUMMARY:Work
 END:VEVENT
 END:VCALENDAR
 """
-        events = module.parse_events(ics, now, now.date(), "Trabajo")
-        self.assertEqual(events[0]["calendar"], "Trabajo")
+        events = module.parse_events(ics, now, now.date(), "Work")
+        self.assertEqual(events[0]["calendar"], "Work")
 
     def test_normalizes_multiple_calendar_sources_and_legacy_config(self):
         self.assertEqual(
             module.normalize_calendar_sources({"icalUrl": "https://one.example/a.ics"}),
-            [{"name": "Calendario", "icalUrl": "https://one.example/a.ics"}],
+            [{"name": "Calendar", "icalUrl": "https://one.example/a.ics"}],
         )
         self.assertEqual(
             module.normalize_calendar_sources({
                 "calendars": [
-                    {"name": "Trabajo", "icalUrl": "https://one.example/a.ics"},
+                    {"name": "Work", "icalUrl": "https://one.example/a.ics"},
                     {"name": "Personal", "url": "https://two.example/b.ics"},
                 ]
             }),
             [
-                {"name": "Trabajo", "icalUrl": "https://one.example/a.ics"},
+                {"name": "Work", "icalUrl": "https://one.example/a.ics"},
                 {"name": "Personal", "icalUrl": "https://two.example/b.ics"},
             ],
         )
@@ -118,12 +121,42 @@ END:VCALENDAR
 BEGIN:VEVENT
 DTSTART:20260817T100000
 RRULE:FREQ=WEEKLY;COUNT=3;BYDAY=MO,WE
-SUMMARY:Seguimiento
+SUMMARY:Follow-up
 END:VEVENT
 END:VCALENDAR
 """
         events = module.parse_events(ics, now, now.date().replace(day=31))
-        self.assertEqual([event["day"] for event in events], ["HOY", "mié 19", "lun 24"])
+        self.assertEqual([event["day"] for event in events], ["TODAY", "Wed 19", "Mon 24"])
+
+    def test_localizes_utc_event_to_configured_timezone(self):
+        tz = ZoneInfo("Pacific/Kiritimati")  # fixed UTC+14, no DST
+        now = datetime(2026, 8, 15, 0, 30, tzinfo=tz)
+        ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20260814T233000Z
+SUMMARY:Cross-midnight
+END:VEVENT
+END:VCALENDAR
+"""
+        events = module.parse_events(ics, now, now.date(), tz=tz)
+        self.assertEqual(events[0]["day"], "TODAY")
+        self.assertEqual(events[0]["date"], "2026-08-15")
+
+    def test_apply_settings_round_trips_without_dropping_calendars(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "config.json"
+            config_path.write_text(json.dumps({"calendars": [{"name": "Work", "icalUrl": "https://one.example/a.ics"}]}), encoding="utf-8")
+            original_path = module.CONFIG_PATH
+            module.CONFIG_PATH = config_path
+            try:
+                module.apply_settings(["language=es", "timezone=America/Sao_Paulo"])
+            finally:
+                module.CONFIG_PATH = original_path
+
+            saved = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["language"], "es")
+            self.assertEqual(saved["timezone"], "America/Sao_Paulo")
+            self.assertEqual(saved["calendars"], [{"name": "Work", "icalUrl": "https://one.example/a.ics"}])
 
 
 if __name__ == "__main__":

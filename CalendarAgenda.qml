@@ -6,6 +6,8 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 
+import "i18n.js" as I18n
+
 Item {
   id: root
 
@@ -13,14 +15,18 @@ Item {
   property string errorMessage: ""
   property bool collapsed: false
   property bool expanded: false
+  property bool settingsOpen: false
+  property string settingsError: ""
   property string selectedDate: ""
   property date shownMonth: new Date()
   readonly property var activeWindow: ToplevelManager.activeToplevel
   readonly property bool desktopVisible: !activeWindow
   property var calendarNames: []
+  property string language: "en"
+  property string timezone: ""
   readonly property string eventScript: Qt.resolvedUrl("calendar_events.py").toString().replace("file://", "")
-  readonly property var monthNames: ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-  readonly property var weekdayNames: ["L", "M", "X", "J", "V", "S", "D"]
+  readonly property var monthNames: I18n.MONTHS[root.language] || I18n.MONTHS.en
+  readonly property var weekdayNames: I18n.WEEKDAY_LETTERS[root.language] || I18n.WEEKDAY_LETTERS.en
   readonly property var calendarCells: buildMonthCells(shownMonth)
   readonly property var displayedEvents: selectedDate === ""
     ? events
@@ -111,17 +117,43 @@ Item {
       events = payload.events || []
       errorMessage = payload.error || ""
       calendarNames = payload.calendars || []
+      language = payload.language || root.language
+      timezone = payload.timezone !== undefined ? payload.timezone : root.timezone
       if (selectedDate !== "" && !eventOnDate(selectedDate)) selectedDate = ""
     } catch (e) {
       events = []
       calendarNames = []
-      errorMessage = "No se pudo leer el calendario"
+      errorMessage = I18n.t(root.language, "couldNotRead")
     }
   }
 
   function toggleExpanded() {
     expanded = !expanded
     if (expanded) collapsed = false
+  }
+
+  function toggleSettings() {
+    settingsOpen = !settingsOpen
+    if (settingsOpen) collapsed = false
+  }
+
+  function applySettings(lang, tz) {
+    settingsProc.command = ["python3", root.eventScript, "--set", "language=" + lang, "timezone=" + tz]
+    settingsProc.running = true
+  }
+
+  function applySettingsResult(raw) {
+    try {
+      var payload = JSON.parse(String(raw || "{}"))
+      if (payload.ok) {
+        settingsError = ""
+        refresh()
+      } else {
+        settingsError = String(payload.error || "")
+      }
+    } catch (e) {
+      settingsError = ""
+    }
   }
 
   Component.onCompleted: refresh()
@@ -141,6 +173,13 @@ Item {
     }
   }
 
+  Process {
+    id: settingsProc
+    stdout: StdioCollector {
+      onStreamFinished: root.applySettingsResult(text)
+    }
+  }
+
   Variants {
     model: Quickshell.screens
 
@@ -153,7 +192,7 @@ Item {
       exclusionMode: ExclusionMode.Ignore
       WlrLayershell.namespace: "io.github.brm-src.calendar-agenda"
       WlrLayershell.layer: WlrLayer.Bottom
-      WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+      WlrLayershell.keyboardFocus: root.settingsOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
       mask: Region {
         x: card.x
         y: card.y
@@ -191,7 +230,7 @@ Item {
             Text {
               width: parent.width - headerActions.width - Style.spacing.sm
               anchors.verticalCenter: parent.verticalCenter
-              text: "AGENDA"
+              text: I18n.t(root.language, "agenda")
               color: Color.accent
               font.family: Style.font.family
               font.pixelSize: Style.font.body
@@ -202,6 +241,18 @@ Item {
             Row {
               id: headerActions
               spacing: Style.spacing.xs
+
+              PanelActionButton {
+                size: Style.space(24)
+                iconText: root.settingsOpen ? "×" : "⚙"
+                foreground: Color.foreground
+                hoverColor: Color.accent
+
+                onClicked: {
+                  root.toggleSettings()
+                  if (root.settingsOpen) timezoneField.text = root.timezone
+                }
+              }
 
               PanelActionButton {
                 size: Style.space(24)
@@ -284,12 +335,13 @@ Item {
             Row {
               width: parent.width
               height: Style.space(20)
+              visible: !root.settingsOpen
 
               Text {
                 width: parent.width
                 text: root.expanded && root.selectedDate !== ""
-                  ? "REUNIONES DEL " + root.selectedDayLabel()
-                  : (root.expanded ? "CALENDARIO Y AGENDA" : "PRÓXIMOS EVENTOS")
+                  ? I18n.t(root.language, "meetingsFor", {day: root.selectedDayLabel()})
+                  : (root.expanded ? I18n.t(root.language, "calendarAndAgenda") : I18n.t(root.language, "upcomingEvents"))
                 color: Color.foreground
                 opacity: 0.68
                 font.family: Style.font.family
@@ -302,7 +354,7 @@ Item {
             }
 
             Column {
-              visible: root.expanded
+              visible: root.expanded && !root.settingsOpen
               width: parent.width
               spacing: Style.spacing.xs
 
@@ -412,15 +464,15 @@ Item {
 
             Row {
               width: parent.width
-              visible: root.displayedEvents.length > 0
+              visible: root.displayedEvents.length > 0 && !root.settingsOpen
               spacing: Style.spacing.sm
-              Text { width: 62; text: "FECHA"; color: Util.alpha(Color.foreground, 0.52); font.family: Style.font.family; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.7 }
-              Text { width: 84; text: "HORA"; color: Util.alpha(Color.foreground, 0.52); font.family: Style.font.family; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.7 }
-              Text { text: "EVENTO"; color: Util.alpha(Color.foreground, 0.52); font.family: Style.font.family; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.7 }
+              Text { width: 62; text: I18n.t(root.language, "date"); color: Util.alpha(Color.foreground, 0.52); font.family: Style.font.family; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.7 }
+              Text { width: 84; text: I18n.t(root.language, "time"); color: Util.alpha(Color.foreground, 0.52); font.family: Style.font.family; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.7 }
+              Text { text: I18n.t(root.language, "event"); color: Util.alpha(Color.foreground, 0.52); font.family: Style.font.family; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.7 }
             }
 
             Repeater {
-              model: root.visibleEventCount
+              model: root.settingsOpen ? 0 : root.visibleEventCount
               delegate: Rectangle {
                 required property int index
                 id: eventRow
@@ -480,14 +532,58 @@ Item {
             }
 
             Text {
-              visible: root.displayedEvents.length === 0
-              text: root.errorMessage !== "" ? root.errorMessage : "Sin eventos en los próximos 30 días"
+              visible: root.displayedEvents.length === 0 && !root.settingsOpen
+              text: root.errorMessage !== "" ? root.errorMessage : I18n.t(root.language, "noEvents")
               textFormat: Text.PlainText
               color: Util.alpha(Color.foreground, 0.64)
               font.family: Style.font.family
               font.pixelSize: Style.font.body
               wrapMode: Text.Wrap
               width: parent.width
+            }
+
+            Column {
+              visible: root.settingsOpen
+              width: parent.width
+              spacing: Style.spacing.sm
+
+              PanelSectionHeader { text: I18n.t(root.language, "language") }
+
+              ButtonGroup {
+                options: [
+                  {value: "en", label: "EN"},
+                  {value: "es", label: "ES"},
+                  {value: "pt", label: "PT"}
+                ]
+                value: root.language
+                onChanged: function(v) {
+                  root.language = v
+                  root.applySettings(v, root.timezone)
+                }
+              }
+
+              PanelSectionHeader { text: I18n.t(root.language, "timezone") }
+
+              TextField {
+                id: timezoneField
+                width: parent.width
+                placeholderText: I18n.t(root.language, "timezonePlaceholder")
+                onEditingFinished: {
+                  root.timezone = text.trim()
+                  root.applySettings(root.language, root.timezone)
+                }
+              }
+
+              Text {
+                visible: root.settingsError !== ""
+                text: root.settingsError
+                textFormat: Text.PlainText
+                color: Color.urgent
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.Wrap
+                width: parent.width
+              }
             }
           }
         }

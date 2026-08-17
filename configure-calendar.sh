@@ -9,18 +9,18 @@ CONFIG_PATH="$CONFIG_DIR/config.json"
 if [[ "${1:-}" == "--remove" ]]; then
   rm -f "$CONFIG_PATH"
   rmdir "$CONFIG_DIR" 2>/dev/null || true
-  printf 'Configuración del calendario eliminada.\n'
+  printf 'Calendar configuration removed.\n'
   exit 0
 fi
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  printf 'Uso: %s [--remove]\n' "$0"
-  printf 'Sin argumentos reemplaza la configuración y permite ingresar varios calendarios.\n'
+  printf 'Usage: %s [--remove]\n' "$0"
+  printf 'With no arguments, replaces the configuration and lets you enter multiple calendars.\n'
   exit 0
 fi
 
-printf 'Agenda de escritorio: agrega uno o más calendarios iCalendar.\n'
-printf 'Pulsa Enter con la URL vacía para terminar.\n\n'
+printf 'Desktop Agenda: add one or more iCalendar calendars.\n'
+printf 'Press Enter with an empty URL to finish.\n\n'
 
 umask 077
 mkdir -p "$CONFIG_DIR"
@@ -29,16 +29,16 @@ trap 'rm -f "$entries_file"' EXIT
 
 count=0
 while true; do
-  read -r -p 'URL privada iCalendar (.ics): ' ical_url || break
+  read -r -p 'Private iCalendar URL (.ics): ' ical_url || break
   [[ -n "$ical_url" ]] || break
-  read -r -p 'Nombre (opcional): ' calendar_name || calendar_name=""
-  calendar_name="${calendar_name:-Calendario $((count + 1))}"
+  read -r -p 'Name (optional): ' calendar_name || calendar_name=""
+  calendar_name="${calendar_name:-Calendar $((count + 1))}"
   printf '%s\t%s\n' "$calendar_name" "$ical_url" >> "$entries_file"
   count=$((count + 1))
 done
 
 if (( count == 0 )); then
-  printf 'No se agregó ningún calendario.\n' >&2
+  printf 'No calendar was added.\n' >&2
   exit 1
 fi
 
@@ -60,7 +60,7 @@ def is_secure_url(value):
 class HTTPSOnlyRedirectHandler(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
         if not is_secure_url(newurl):
-            raise ValueError("La URL redirige a una conexión no segura")
+            raise ValueError("URL redirects to an insecure connection")
         return super().redirect_request(request, fp, code, msg, headers, newurl)
 
 opener = build_opener(HTTPSOnlyRedirectHandler())
@@ -68,25 +68,33 @@ for line in entries_path.read_text(encoding="utf-8").splitlines():
     name, url = line.split("\t", 1)
     url = url.strip()
     if not is_secure_url(url):
-        raise SystemExit(f"La URL de {name} debe comenzar con https://")
+        raise SystemExit(f"The URL for {name} must start with https://")
     try:
         request = Request(url, headers={"User-Agent": "omarchy-calendar-agenda-setup/1.0"})
         with opener.open(request, timeout=15) as response:
             sample = response.read(512_000).decode("utf-8-sig", errors="replace")
     except Exception:
-        raise SystemExit(f"No se pudo leer el calendario: {name}")
+        raise SystemExit(f"Could not read calendar: {name}")
     if "BEGIN:VCALENDAR" not in sample:
-        raise SystemExit(f"La URL de {name} no parece un calendario iCalendar (.ics)")
+        raise SystemExit(f"The URL for {name} does not look like an iCalendar (.ics) feed")
     entries.append({"name": name, "icalUrl": url})
 
+try:
+    existing = json.loads(config_path.read_text(encoding="utf-8"))
+    if not isinstance(existing, dict):
+        existing = {}
+except (FileNotFoundError, OSError, json.JSONDecodeError):
+    existing = {}
+existing["calendars"] = entries
+
 tmp = config_path.with_name(config_path.name + ".tmp")
-tmp.write_text(json.dumps({"calendars": entries}, ensure_ascii=False) + "\n", encoding="utf-8")
+tmp.write_text(json.dumps(existing, ensure_ascii=False) + "\n", encoding="utf-8")
 os.chmod(tmp, 0o600)
 os.replace(tmp, config_path)
 PY
 chmod 600 "$CONFIG_PATH"
-printf '\nCalendarios configurados: %s\n' "$count"
-printf 'Archivo: %s\n' "$CONFIG_PATH"
+printf '\nCalendars configured: %s\n' "$count"
+printf 'File: %s\n' "$CONFIG_PATH"
 if command -v omarchy >/dev/null 2>&1; then
   omarchy restart shell
 fi
