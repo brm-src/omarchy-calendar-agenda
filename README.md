@@ -1,5 +1,9 @@
 # Desktop Agenda for Omarchy
 
+<p align="center">
+  <a href="https://www.ko-fi.com/brmcl"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" /></a>
+</p>
+
 [Español](README.es.md)
 
 A small desktop agenda for Omarchy Quattro. It shows upcoming meetings below the top bar, without opening a calendar app and without using a vendor API.

@@ -1,5 +1,9 @@
 # Desktop Agenda para Omarchy
 
+<p align="center">
+  <a href="https://www.ko-fi.com/brmcl"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" /></a>
+</p>
+
 [English](README.md)
 
 Agenda de escritorio para Omarchy Quattro: muestra tus próximas reuniones directamente sobre el escritorio, debajo de la barra superior, sin abrir una aplicación de calendario ni usar una API del proveedor.
