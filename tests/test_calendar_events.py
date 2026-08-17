@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -41,6 +42,59 @@ END:VCALENDAR
         self.assertEqual(events[0]["title"], "Reunión, importante")
         self.assertEqual(events[0]["time"], "08:00")
         self.assertEqual(events[0]["url"], "https://example.com/event")
+        self.assertEqual(events[0]["date"], "2026-08-14")
+        self.assertFalse(events[0]["allDay"])
+
+    def test_parses_all_day_event_with_iso_date(self):
+        now = datetime.fromisoformat("2026-08-14T09:00:00-04:00")
+        ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20260815
+SUMMARY:Día de trabajo
+END:VEVENT
+END:VCALENDAR
+"""
+        events = module.parse_events(ics, now, now.date() + module.timedelta(days=2))
+        self.assertEqual(events[0]["date"], "2026-08-15")
+        self.assertTrue(events[0]["allDay"])
+
+    def test_keeps_calendar_name_on_events(self):
+        now = datetime.fromisoformat("2026-08-14T07:00:00-04:00")
+        ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20260814T120000Z
+SUMMARY:Trabajo
+END:VEVENT
+END:VCALENDAR
+"""
+        events = module.parse_events(ics, now, now.date(), "Trabajo")
+        self.assertEqual(events[0]["calendar"], "Trabajo")
+
+    def test_normalizes_multiple_calendar_sources_and_legacy_config(self):
+        self.assertEqual(
+            module.normalize_calendar_sources({"icalUrl": "https://one.example/a.ics"}),
+            [{"name": "Calendario", "icalUrl": "https://one.example/a.ics"}],
+        )
+        self.assertEqual(
+            module.normalize_calendar_sources({
+                "calendars": [
+                    {"name": "Trabajo", "icalUrl": "https://one.example/a.ics"},
+                    {"name": "Personal", "url": "https://two.example/b.ics"},
+                ]
+            }),
+            [
+                {"name": "Trabajo", "icalUrl": "https://one.example/a.ics"},
+                {"name": "Personal", "icalUrl": "https://two.example/b.ics"},
+            ],
+        )
+
+    def test_reads_complete_calendar_response_until_safe_limit(self):
+        body = b"BEGIN:VCALENDAR\n" + (b"x" * 128)
+        self.assertEqual(module.read_calendar_response(io.BytesIO(body)), body.decode())
+
+    def test_rejects_calendar_response_over_safe_limit(self):
+        with self.assertRaises(ValueError):
+            module.read_calendar_response(io.BytesIO(b"x" * (module.MAX_FEED_BYTES + 1)))
 
     def test_skips_cancelled_and_expired_events(self):
         now = datetime.fromisoformat("2026-08-14T09:00:00-04:00")

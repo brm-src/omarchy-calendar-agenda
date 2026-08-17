@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 CONFIG_PATH = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy" / "calendar-widget" / "config.json"
 HORIZON_DAYS = 30
 MAX_EVENTS = 8
+MAX_FEED_BYTES = 8_000_000
 WEEKDAYS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
 BYDAY = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
@@ -128,8 +129,8 @@ def event_link(values: dict[str, tuple[dict[str, str], str]]) -> str:
     return next((value for value in candidates if value.startswith("http")), "")
 
 
-def parse_events(text: str, now: datetime, horizon: date) -> list[dict[str, str]]:
-    result: list[dict[str, str]] = []
+def parse_events(text: str, now: datetime, horizon: date, calendar_name: str = "") -> list[dict[str, object]]:
+    result: list[dict[str, object]] = []
     current: dict[str, tuple[dict[str, str], str]] | None = None
     for line in unfold(text):
         if line == "BEGIN:VEVENT":
@@ -147,8 +148,11 @@ def parse_events(text: str, now: datetime, horizon: date) -> list[dict[str, str]
                     continue
                 day = "HOY" if occurrence.date() == now.date() else "MAÑANA" if occurrence.date() == now.date() + timedelta(days=1) else f"{WEEKDAYS[occurrence.weekday()]} {occurrence.day}"
                 result.append({
+                    "date": occurrence.date().isoformat(),
                     "day": day,
                     "time": "TODO EL DÍA" if all_day else occurrence.strftime("%H:%M"),
+                    "allDay": all_day,
+                    "calendar": calendar_name or "Calendario",
                     "title": unescape(current.get("SUMMARY", ({}, "Sin título"))[1]) or "Sin título",
                     "url": event_link(current),
                     "sort": occurrence.isoformat(),
@@ -157,28 +161,62 @@ def parse_events(text: str, now: datetime, horizon: date) -> list[dict[str, str]
         elif current is not None and ":" in line:
             name, params, value = property_value(line)
             current[name] = (params, value)
-    result.sort(key=lambda item: item["sort"])
+    result.sort(key=lambda item: str(item["sort"]))
     for item in result:
         item.pop("sort", None)
     return result[:MAX_EVENTS]
 
 
-def load_config() -> str:
+def normalize_calendar_sources(config: object) -> list[dict[str, str]]:
+    if not isinstance(config, dict):
+        return []
+
+    raw_calendars = config.get("calendars")
+    if isinstance(raw_calendars, list):
+        sources: list[dict[str, str]] = []
+        for index, item in enumerate(raw_calendars, start=1):
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("icalUrl") or item.get("url") or "").strip()
+            if not url:
+                continue
+            name = str(item.get("name") or f"Calendario {index}").strip()
+            sources.append({"name": name or f"Calendario {index}", "icalUrl": url})
+        return sources
+
+    url = str(config.get("icalUrl") or config.get("ical_url") or config.get("url") or "").strip()
+    return [{"name": "Calendario", "icalUrl": url}] if url else []
+
+
+def load_config() -> dict[str, object]:
     env_url = os.environ.get("OMARCHY_CALENDAR_ICS_URL", "").strip()
     if env_url:
-        return env_url
+        return {"icalUrl": env_url}
     try:
-        config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        return ""
+        return {}
     except (OSError, json.JSONDecodeError):
-        return ""
-    return str(config.get("icalUrl") or config.get("ical_url") or config.get("url") or "").strip()
+        return {}
 
 
 def is_secure_ical_url(url: str) -> bool:
     parsed = urlsplit(url)
     return parsed.scheme.lower() == "https" and bool(parsed.netloc)
+
+
+def fetch_calendar(url: str) -> str:
+    request = Request(url, headers={"User-Agent": "omarchy-calendar-agenda/1.0"})
+    opener = build_opener(HTTPSOnlyRedirectHandler())
+    with opener.open(request, timeout=15) as response:
+        return read_calendar_response(response)
+
+
+def read_calendar_response(response: object) -> str:
+    data = response.read(MAX_FEED_BYTES + 1)  # type: ignore[attr-defined]
+    if len(data) > MAX_FEED_BYTES:
+        raise ValueError("El feed iCalendar supera el límite permitido")
+    return data.decode("utf-8-sig", errors="replace")
 
 
 class HTTPSOnlyRedirectHandler(HTTPRedirectHandler):
@@ -189,20 +227,27 @@ class HTTPSOnlyRedirectHandler(HTTPRedirectHandler):
 
 
 def main() -> None:
-    url = load_config()
-    if not url:
-        json_out(error=f"Configura tu URL privada iCalendar en {CONFIG_PATH}", events=[])
+    sources = normalize_calendar_sources(load_config())
+    if not sources:
+        json_out(error=f"Configura al menos un calendario en {CONFIG_PATH}", events=[], calendars=[])
         return
-    if not is_secure_ical_url(url):
-        json_out(error="La URL iCalendar debe comenzar con https://", events=[])
-        return
-    request = Request(url, headers={"User-Agent": "omarchy-calendar-agenda/1.0"})
-    opener = build_opener(HTTPSOnlyRedirectHandler())
-    with opener.open(request, timeout=15) as response:
-        calendar = response.read(2_000_000).decode("utf-8-sig", errors="replace")
+
     now = datetime.now().astimezone()
-    events = parse_events(calendar, now, now.date() + timedelta(days=HORIZON_DAYS))
-    json_out(updated=now.isoformat(), events=events)
+    horizon = now.date() + timedelta(days=HORIZON_DAYS)
+    events: list[dict[str, object]] = []
+    errors: list[str] = []
+    for source in sources:
+        url = source["icalUrl"]
+        if not is_secure_ical_url(url):
+            errors.append(source["name"])
+            continue
+        try:
+            events.extend(parse_events(fetch_calendar(url), now, horizon, source["name"]))
+        except Exception:
+            errors.append(source["name"])
+
+    events.sort(key=lambda item: (str(item.get("date", "")), str(item.get("time", "")), str(item.get("title", ""))))
+    json_out(updated=now.isoformat(), events=events[:MAX_EVENTS], calendars=[source["name"] for source in sources], error=("No se pudo actualizar: " + ", ".join(errors)) if errors and not events else "")
 
 
 if __name__ == "__main__":
