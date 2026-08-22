@@ -2,11 +2,13 @@
   "schemaVersion": 1,
   "id": "io.github.brm-src.calendar-agenda",
   "name": "Desktop Agenda",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "Cris / brm-src",
   "license": "MIT",
   "description": "A minimal Omarchy desktop agenda for one or more private HTTPS iCalendar feeds, with day filtering, monthly view, and event links.",
-  "kinds": ["service"],
+  "kinds": [
+    "service"
+  ],
   "entryPoints": {
     "service": "CalendarAgenda.qml"
   }

@@ -170,8 +170,8 @@ Item {
         anchors.topMargin: Style.bar.sizeHorizontal + Style.space(12)
         anchors.rightMargin: Style.gapsOut
         radius: Style.cornerRadius
-        color: Color.background
-        borderSpec: Border.surfaceSpec("menu", "border", Color.accent, 1)
+        color: Color.menu.background
+        borderSpec: Border.surfaceSpec("menu", "border", Color.menu.border, Math.max(1, Style.space(2)))
         visible: root.desktopVisible && (root.events.length > 0 || root.errorMessage !== "")
         clip: true
 
@@ -180,35 +180,55 @@ Item {
           anchors.top: parent.top
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.margins: Style.spacing.md
-          spacing: Style.spacing.sm
+          anchors.margins: Style.spacing.panelPadding
+          spacing: Style.spacing.md
 
+          // ---- header: bold title + dimmed subtitle, first-party grammar ----
           Row {
             id: header
             width: parent.width
-            height: Style.space(26)
 
-            Text {
-              width: parent.width - headerActions.width - Style.spacing.sm
-              anchors.verticalCenter: parent.verticalCenter
-              text: "AGENDA"
-              color: Color.accent
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
-              font.bold: true
-              font.letterSpacing: 1.2
+            Column {
+              width: parent.width - headerActions.width - Style.spacing.md
+              spacing: Style.spacing.xs
+
+              Text {
+                textFormat: Text.PlainText
+                text: "agenda"
+                color: Color.menu.text
+                font.family: Style.font.menuFamily
+                font.pixelSize: Style.font.title
+                font.bold: true
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: root.expanded && root.selectedDate !== ""
+                  ? "Reuniones del " + root.selectedDayLabel()
+                  : (root.expanded ? "Calendario y agenda" : root.displayedEvents.length > 0
+                    ? root.displayedEvents.length + (root.displayedEvents.length === 1 ? " evento próximo" : " eventos próximos")
+                    : "Sin eventos próximos")
+                color: Color.menu.text
+                opacity: 0.62
+                font.family: Style.font.menuFamily
+                font.pixelSize: Style.font.bodySmall
+                elide: Text.ElideRight
+                maximumLineCount: 1
+              }
             }
 
             Row {
               id: headerActions
+              anchors.verticalCenter: parent.verticalCenter
               spacing: Style.spacing.xs
 
               PanelActionButton {
                 size: Style.space(24)
                 iconText: root.collapsed ? "▸" : (root.expanded ? "−" : "+")
-                foreground: Color.foreground
-                hoverColor: Color.accent
-
+                foreground: Color.menu.text
+                fontFamily: Style.font.menuFamily
+                tooltipText: root.collapsed ? "Expandir" : (root.expanded ? "Contraer calendario" : "Ver calendario")
                 onClicked: {
                   if (root.collapsed) root.collapsed = false
                   else root.toggleExpanded()
@@ -218,35 +238,45 @@ Item {
               PanelActionButton {
                 size: Style.space(24)
                 iconText: "↻"
-                foreground: Color.foreground
-                hoverColor: Color.accent
-
+                foreground: Color.menu.text
+                fontFamily: Style.font.menuFamily
+                tooltipText: "Actualizar"
                 onClicked: root.refresh()
               }
             }
           }
 
-          Rectangle { width: parent.width; height: 1; color: Util.alpha(Color.accent, 0.40) }
-
-          Rectangle {
+          // ---- collapsed: single summary row ----
+          CursorSurface {
             visible: root.collapsed
             width: parent.width
-            height: 34
+            height: collapsedRow.implicitHeight + Style.spacing.rowPaddingX * 2
+            foreground: Color.menu.text
+            accent: Color.accent
             radius: Style.cornerRadius
-            color: Util.alpha(Color.foreground, 0.06)
+
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: { root.collapsed = false }
+            }
 
             Row {
-              anchors.fill: parent
-              anchors.leftMargin: Style.spacing.sm
-              anchors.rightMargin: Style.spacing.sm
+              id: collapsedRow
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              anchors.leftMargin: Style.space(10)
+              anchors.rightMargin: Style.space(10)
               spacing: Style.spacing.sm
 
               Text {
                 width: 62
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.displayedEvents.length > 0 ? root.displayedEvents[0].day : ""
+                textFormat: Text.PlainText
                 color: Color.accent
-                font.family: Style.font.family
+                font.family: Style.font.menuFamily
                 font.pixelSize: Style.font.caption
                 font.bold: true
                 elide: Text.ElideRight
@@ -256,8 +286,9 @@ Item {
                 width: 84
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.displayedEvents.length > 0 ? root.displayedEvents[0].time : ""
-                color: Color.foreground
-                font.family: Style.font.family
+                textFormat: Text.PlainText
+                color: Color.menu.text
+                font.family: Style.font.menuFamily
                 font.pixelSize: Style.font.body
                 font.bold: true
               }
@@ -268,43 +299,36 @@ Item {
                 text: root.displayedEvents.length > 0
                   ? (root.displayedEvents[0].allDay ? "• " + root.displayedEvents[0].title : root.displayedEvents[0].title)
                   : root.errorMessage
-                color: Color.foreground
-                font.family: Style.font.family
+                textFormat: Text.PlainText
+                color: Color.menu.text
+                font.family: Style.font.menuFamily
                 font.pixelSize: Style.font.body
                 elide: Text.ElideRight
+                maximumLineCount: 1
               }
             }
           }
 
+          // ---- expanded content ----
           Column {
             visible: !root.collapsed
             width: parent.width
             spacing: Style.spacing.sm
 
-            Row {
-              width: parent.width
-              height: Style.space(20)
+            PanelSeparator { foreground: Color.menu.text }
 
-              Text {
-                width: parent.width
-                text: root.expanded && root.selectedDate !== ""
-                  ? "REUNIONES DEL " + root.selectedDayLabel()
-                  : (root.expanded ? "CALENDARIO Y AGENDA" : "PRÓXIMOS EVENTOS")
-                color: Color.foreground
-                opacity: 0.68
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                font.letterSpacing: 0.7
-              }
-
-
-            }
-
+            // CALENDAR section (small-caps header)
             Column {
               visible: root.expanded
               width: parent.width
               spacing: Style.spacing.xs
+
+              PanelSectionHeader {
+                width: parent.width
+                foreground: Color.menu.text
+                fontFamily: Style.font.menuFamily
+                text: "CALENDARIO"
+              }
 
               Row {
                 width: parent.width
@@ -314,9 +338,9 @@ Item {
                   id: monthPrevious
                   size: Style.space(22)
                   iconText: "‹"
-                  foreground: Color.foreground
-                  hoverColor: Color.accent
-
+                  foreground: Color.menu.text
+                  fontFamily: Style.font.menuFamily
+                  tooltipText: "Mes anterior"
                   onClicked: root.moveMonth(-1)
                 }
 
@@ -324,8 +348,9 @@ Item {
                   width: parent.width - monthNext.width - monthPrevious.width
                   anchors.verticalCenter: parent.verticalCenter
                   text: root.monthLabel()
-                  color: Color.foreground
-                  font.family: Style.font.family
+                  textFormat: Text.PlainText
+                  color: Color.menu.text
+                  font.family: Style.font.menuFamily
                   font.pixelSize: Style.font.body
                   font.bold: true
                   horizontalAlignment: Text.AlignHCenter
@@ -335,9 +360,9 @@ Item {
                   id: monthNext
                   size: Style.space(22)
                   iconText: "›"
-                  foreground: Color.foreground
-                  hoverColor: Color.accent
-
+                  foreground: Color.menu.text
+                  fontFamily: Style.font.menuFamily
+                  tooltipText: "Mes siguiente"
                   onClicked: root.moveMonth(1)
                 }
               }
@@ -355,9 +380,9 @@ Item {
                     width: (weekdayGrid.width - Style.spacing.xs * 6) / 7
                     height: Style.space(16)
                     text: modelData
-                    color: Color.foreground
+                    color: Color.menu.text
                     opacity: 0.48
-                    font.family: Style.font.family
+                    font.family: Style.font.menuFamily
                     font.pixelSize: Style.font.caption
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
@@ -380,7 +405,7 @@ Item {
                     height: Style.space(24)
                     radius: Style.cornerRadius
                     color: dayMouse.containsMouse || root.selectedDate === modelData.date
-                      ? Util.alpha(Color.accent, 0.36)
+                      ? Style.hoverFillFor(Color.menu.text, Color.accent)
                       : (root.todayDate(modelData.date)
                       ? Color.accent
                       : (root.eventOnDate(modelData.date) ? Util.alpha(Color.accent, 0.20) : "transparent"))
@@ -390,10 +415,11 @@ Item {
                     Text {
                       anchors.centerIn: parent
                       text: modelData.day
+                      textFormat: Text.PlainText
                       color: root.todayDate(modelData.date) || root.selectedDate === modelData.date
                         ? Color.background
-                        : (modelData.inMonth ? Color.foreground : Util.alpha(Color.foreground, 0.28))
-                      font.family: Style.font.family
+                        : (modelData.inMonth ? Color.menu.text : Util.alpha(Color.menu.text, 0.28))
+                      font.family: Style.font.menuFamily
                       font.pixelSize: Style.font.caption
                       font.bold: root.todayDate(modelData.date) || root.eventOnDate(modelData.date)
                     }
@@ -410,37 +436,49 @@ Item {
               }
             }
 
-            Row {
+            // EVENTS section (small-caps header)
+            PanelSectionHeader {
               width: parent.width
               visible: root.displayedEvents.length > 0
-              spacing: Style.spacing.sm
-              Text { width: 62; text: "FECHA"; color: Util.alpha(Color.foreground, 0.52); font.family: Style.font.family; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.7 }
-              Text { width: 84; text: "HORA"; color: Util.alpha(Color.foreground, 0.52); font.family: Style.font.family; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.7 }
-              Text { text: "EVENTO"; color: Util.alpha(Color.foreground, 0.52); font.family: Style.font.family; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.7 }
+              foreground: Color.menu.text
+              fontFamily: Style.font.menuFamily
+              text: root.expanded && root.selectedDate !== ""
+                ? "EVENTOS DEL " + root.selectedDayLabel().toUpperCase()
+                : "PRÓXIMOS EVENTOS"
             }
 
             Repeater {
               model: root.visibleEventCount
-              delegate: Rectangle {
+              delegate: CursorSurface {
                 required property int index
-                id: eventRow
                 width: parent.width
-                height: 31
+                height: eventRowContent.implicitHeight + Style.spacing.rowPaddingX * 2
+                foreground: Color.menu.text
+                accent: Color.accent
                 radius: Style.cornerRadius
-                color: eventMouse.containsMouse ? Util.alpha(Color.accent, 0.20) : Util.alpha(Color.foreground, 0.06)
+
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.openEvent(String(root.displayedEvents[index].url || ""))
+                }
 
                 Row {
-                  anchors.fill: parent
-                  anchors.leftMargin: Style.spacing.sm
-                  anchors.rightMargin: Style.spacing.sm
+                  id: eventRowContent
+                  anchors.left: parent.left
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  anchors.leftMargin: Style.space(10)
+                  anchors.rightMargin: Style.space(10)
                   spacing: Style.spacing.sm
 
                   Text {
                     width: 62
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.displayedEvents[index].day
+                    textFormat: Text.PlainText
                     color: Color.accent
-                    font.family: Style.font.family
+                    font.family: Style.font.menuFamily
                     font.pixelSize: Style.font.caption
                     font.bold: true
                     elide: Text.ElideRight
@@ -450,8 +488,9 @@ Item {
                     width: 84
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.displayedEvents[index].time
-                    color: Color.foreground
-                    font.family: Style.font.family
+                    textFormat: Text.PlainText
+                    color: Color.menu.text
+                    font.family: Style.font.menuFamily
                     font.pixelSize: Style.font.body
                     font.bold: true
                   }
@@ -461,20 +500,12 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.displayedEvents[index].allDay ? "• " + root.displayedEvents[index].title : root.displayedEvents[index].title
                     textFormat: Text.PlainText
-                    color: Color.foreground
-                    font.family: Style.font.family
+                    color: Color.menu.text
+                    font.family: Style.font.menuFamily
                     font.pixelSize: Style.font.body
                     elide: Text.ElideRight
                     maximumLineCount: 1
                   }
-                }
-
-                MouseArea {
-                  id: eventMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: root.openEvent(String(root.displayedEvents[index].url || ""))
                 }
               }
             }
@@ -483,9 +514,10 @@ Item {
               visible: root.displayedEvents.length === 0
               text: root.errorMessage !== "" ? root.errorMessage : "Sin eventos en los próximos 30 días"
               textFormat: Text.PlainText
-              color: Util.alpha(Color.foreground, 0.64)
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
+              color: Color.menu.text
+              opacity: 0.45
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.bodySmall
               wrapMode: Text.Wrap
               width: parent.width
             }
