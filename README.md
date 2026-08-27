@@ -1,76 +1,64 @@
-# Desktop Agenda for Omarchy
-
-<p align="center">
-  <a href="https://www.ko-fi.com/brmcl"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" /></a>
-</p>
+# Calendar Agenda for Omarchy
 
 [Español](README.es.md)
 
-A small desktop agenda for Omarchy Quattro. It shows upcoming meetings below the top bar, without opening a calendar app and without using a vendor API.
+A quiet calendar widget for the Omarchy bar. It reads private iCalendar (`.ics`) feeds directly from your machine and gives you day, week, and month views without opening a calendar app or using a vendor API.
 
-![Desktop Agenda preview](preview.png)
+![Calendar Agenda preview](preview.png)
 
-It works with any service that publishes an iCalendar (`.ics`) feed: Google Calendar, Nextcloud, Fastmail, institutional calendars, or a self-hosted calendar.
+Works with Google Calendar, Nextcloud, Fastmail, institutional calendars, and any service that publishes an iCalendar feed.
 
-## What it does
+## What changed in 1.3
 
-- Keeps upcoming meetings visible while you are on the desktop.
-- Starts compact so it does not take over the screen.
-- Expands to a monthly calendar and a longer agenda.
-- Filters the agenda by day.
-- Combines multiple calendars in one widget.
-- Opens Zoom, Google Meet, and other event links with one click.
-- Uses no new account, API key, OAuth flow, or third-party proxy.
+- Lives in the Omarchy bar instead of occupying the desktop.
+- Day, week, and month views with Today and previous/next navigation.
+- Events grouped by day, with calendar and location metadata when available.
+- Multi-day and all-day events expanded across every affected date.
+- Compact, theme-aware panel using Omarchy's native UI primitives.
+- Keyboard shortcuts: `D`, `W`, `M`, `T`, `[`, `]`, and `R`.
+- Middle-click the bar icon to refresh.
+- Keeps support for one or more private HTTPS feeds and event links.
+
+OAuth and a new sync service are intentionally not included. The existing iCalendar flow is vendor-neutral, smaller, and does not store account credentials.
 
 ## Install
 
-Requires Omarchy Quattro, Quickshell, and Python 3.9+.
+Requires Omarchy Quattro, Quickshell, and Python 3.10+.
 
 ```bash
 omarchy plugin add https://github.com/brm-src/omarchy-calendar-agenda.git --enable --yes
 bash ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/configure-calendar.sh
 ```
 
-The setup helper asks for one or more private iCalendar URLs and a name for each calendar. Press Enter on an empty URL when you are done.
-
-It:
-
-- requires HTTPS;
-- verifies that every URL returns a real iCalendar feed;
-- stores the configuration with mode `600`;
-- restarts the Omarchy shell so the agenda is ready.
-
-It does not install packages or execute code downloaded from the network.
+The helper asks for one or more private iCalendar URLs and an optional name for each calendar. Press Enter on an empty URL when you are done. It requires HTTPS, verifies the feed, stores the configuration with mode `600`, and restarts the shell.
 
 To inspect the source before enabling it:
 
 ```bash
 omarchy plugin add https://github.com/brm-src/omarchy-calendar-agenda.git --yes
-omarchy plugin enable io.github.brm-src.calendar-agenda
 ```
+
+Then add **Calendar Agenda** to the right side of the bar from the Omarchy plugin controls.
 
 ## Configure it
 
-### Google Calendar
+For Google Calendar:
 
-1. Open Google Calendar.
-2. Open Settings with the gear icon.
-3. Select the calendar in the left sidebar.
-4. Scroll to **Integrate calendar**.
-5. Copy **Secret address in iCal format**.
-6. Paste it when `configure-calendar.sh` asks for a URL.
+1. Open Google Calendar settings.
+2. Select the calendar.
+3. Open **Integrate calendar**.
+4. Copy **Secret address in iCal format**.
+5. Paste it when `configure-calendar.sh` asks for a URL.
 
-The URL normally ends in `/basic.ics`. Do not paste the Google Calendar page URL or a public address when the calendar is private.
+Do not paste the Google Calendar page URL. A private iCalendar URL is a bearer secret.
 
-### Multiple calendars
-
-Run the helper again and add every feed you want:
+Run the helper again to replace the configured feeds:
 
 ```bash
 bash ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/configure-calendar.sh
 ```
 
-The configuration is stored at `~/.config/omarchy/calendar-widget/config.json`:
+Configuration is stored at `~/.config/omarchy/calendar-widget/config.json`:
 
 ```json
 {
@@ -83,70 +71,58 @@ The configuration is stored at `~/.config/omarchy/calendar-widget/config.json`:
 
 The legacy single-calendar `icalUrl` format is still accepted.
 
-## Interface behavior
+## Interface
 
-The card sits in the upper-right corner of the desktop, below the top bar. When an application window is active, it hides completely so it never overlays a window or bleeds through a translucent terminal.
+Click the calendar icon in the bar to open the panel.
 
-- **`+`**: expand the agenda and show the monthly calendar.
-- **`−`**: return to the compact view.
-- **`↻`**: refresh every feed immediately.
-- **Day with events**: click it to filter the list to that day.
-- **Selected day**: click it again to clear the filter.
-- **Empty day**: opens Google Calendar directly on that date so you can create an event.
-- **Event row**: opens the event link, preferring Zoom or Google Meet links when present.
-- **All-day events**: remain all-day events; the plugin does not invent a time.
+- **DAY**, **WEEK**, **MONTH**: change the visible range.
+- **Today**: return to the current week.
+- **‹ / ›**: move through the selected range.
+- **↻**: refresh all feeds.
+- **Event row**: open its detected Zoom, Google Meet, or other event link.
+- **D / W / M**: switch views.
+- **T**: return to today.
+- **[ / ]**: move backward or forward.
+- **R**: refresh.
+- **Esc**: close the panel.
 
-The compact view shows the next four events. The expanded view shows up to eight events and the current month.
+The feed is fetched when the panel opens and refreshed every five minutes while it is open. Events are read for the next 30 days and capped at 64 entries to keep the shell responsive.
 
 ## Privacy and security
 
-The plugin uses no vendor API, OAuth, client secret, or shared credential. Your machine fetches the feeds you configure directly.
+The plugin uses no vendor API, OAuth, client secret, or shared credential. Your machine fetches the feeds directly.
 
-A private iCalendar URL is a bearer secret: anyone who obtains it may read that calendar. Therefore:
+- Use only `https://` URLs.
+- Never publish a private feed URL in issues, screenshots, or repositories.
+- Regenerate the URL at the provider if it leaks.
+- Keep the local configuration at mode `600`.
+- The plugin rejects redirects from HTTPS to HTTP.
 
-- use only `https://` URLs;
-- never publish the URL in issues, screenshots, or repositories;
-- regenerate it at the calendar provider if it leaks;
-- keep the local configuration at mode `600`.
-
-Check the permissions with:
+Check the permissions:
 
 ```bash
 stat -c '%a %n' ~/.config/omarchy/calendar-widget/config.json
 ```
 
-The expected output is `600`.
+Expected output: `600`.
 
 ## Troubleshooting
 
-### No events appear
+Inspect the feed response directly:
 
-1. Inspect the configured feed:
+```bash
+python3 ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/calendar_events.py
+```
 
-   ```bash
-   python3 ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/calendar_events.py
-   ```
+If the output asks for configuration, run the helper again. Events beyond the next 30 days are intentionally not shown.
 
-2. If it reports a configuration error, run the helper again:
+If the widget is missing from the bar, add **Calendar Agenda** to the bar layout and restart the shell:
 
-   ```bash
-   bash ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/configure-calendar.sh
-   ```
-
-3. Events beyond the next 30 days are intentionally not shown.
-4. If the URL stopped working, generate a new secret iCal URL at the provider.
-
-### The agenda is not visible
-
-It is intentionally below windows. Minimize or close applications to return to a clean desktop.
-
-### The feed changed but the widget did not
-
-Press `↻`. Automatic refresh runs every five minutes.
+```bash
+omarchy restart shell
+```
 
 ## Uninstall
-
-Remove the plugin and its local configuration:
 
 ```bash
 bash ~/.config/omarchy/plugins/io.github.brm-src.calendar-agenda/configure-calendar.sh --remove
@@ -165,10 +141,6 @@ omarchy plugin validate .
 bash -n configure-calendar.sh
 git diff --check
 ```
-
-## Marketplace
-
-Desktop Agenda is a small productivity plugin for Omarchy: local, vendor-neutral, and compatible with any HTTPS iCalendar feed. Marketplace listing is not a substitute for reviewing source code; Omarchy plugins run unsandboxed.
 
 ## License
 

@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
-  <title id="title">Desktop Agenda for Omarchy</title>
-  <desc id="desc">An Omarchy desktop agenda with a monthly calendar, highlighted meeting days, and the meetings for a selected day.</desc>
+  <title id="title">Calendar Agenda for Omarchy</title>
+  <desc id="desc">A theme-aware Omarchy bar widget with day, week, and month views and grouped calendar events.</desc>
   <defs>
     <linearGradient id="desk" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#17191d"/>
+      <stop offset="0" stop-color="#17151d"/>
       <stop offset="1" stop-color="#090a0d"/>
     </linearGradient>
     <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f04b9a" stop-opacity=".25"/>
-      <stop offset="1" stop-color="#7a4cff" stop-opacity="0"/>
+      <stop offset="0" stop-color="#e0228f" stop-opacity=".26"/>
+      <stop offset="1" stop-color="#6736b8" stop-opacity="0"/>
     </linearGradient>
     <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
       <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#000" flood-opacity=".55"/>
@@ -17,45 +17,44 @@
   <rect width="1600" height="1000" fill="url(#desk)"/>
   <circle cx="180" cy="180" r="420" fill="url(#glow)"/>
   <path d="M0 760 C350 620 530 860 840 720 S1330 560 1600 730 V1000 H0Z" fill="#111318" opacity=".75"/>
-  <rect x="0" y="0" width="1600" height="64" fill="#0b0c0f" opacity=".96"/>
+  <rect width="1600" height="64" fill="#0b0c0f" opacity=".96"/>
   <text x="42" y="40" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="22" font-weight="700">omarchy</text>
-  <text x="1390" y="40" fill="#aaa5ac" font-family="Inter, sans-serif" font-size="18">Tue 10:42</text>
-
-  <rect x="1020" y="88" width="510" height="760" rx="22" fill="#17191d" stroke="#f04b9a" stroke-opacity=".8" filter="url(#shadow)"/>
-  <text x="1052" y="133" fill="#f04b9a" font-family="Inter, sans-serif" font-size="18" font-weight="800" letter-spacing="4">AGENDA</text>
-  <circle cx="1450" cy="126" r="17" fill="#f04b9a" fill-opacity=".16"/>
-  <text x="1443" y="133" fill="#f04b9a" font-family="Inter, sans-serif" font-size="22" font-weight="700">+</text>
-  <text x="1481" y="133" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="20">↻</text>
-  <line x1="1052" y1="157" x2="1498" y2="157" stroke="#f04b9a" stroke-opacity=".45"/>
-  <text x="1052" y="190" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2">REUNIONES DEL MAR 18</text>
-
-  <text x="1064" y="230" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="16">‹</text>
-  <text x="1220" y="230" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="16" font-weight="700">AGOSTO 2026</text>
-  <text x="1477" y="230" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="16">›</text>
-  <g fill="#817b86" font-family="Inter, sans-serif" font-size="11" font-weight="700" text-anchor="middle">
-    <text x="1080" y="260">L</text><text x="1150" y="260">M</text><text x="1220" y="260">X</text><text x="1290" y="260">J</text><text x="1360" y="260">V</text><text x="1430" y="260">S</text><text x="1490" y="260">D</text>
-  </g>
-  <g font-family="Inter, sans-serif" font-size="13" text-anchor="middle">
-    <g fill="#706b74"><text x="1080" y="290">27</text><text x="1150" y="290">28</text><text x="1220" y="290">29</text><text x="1290" y="290">30</text><text x="1360" y="290">31</text></g>
-    <text x="1430" y="290" fill="#f3f0f2">1</text><text x="1490" y="290" fill="#f3f0f2">2</text>
-    <text x="1080" y="324" fill="#f3f0f2">3</text><text x="1150" y="324" fill="#f3f0f2">4</text><text x="1220" y="324" fill="#f3f0f2">5</text><text x="1290" y="324" fill="#f3f0f2">6</text><text x="1360" y="324" fill="#f3f0f2">7</text><text x="1430" y="324" fill="#f3f0f2">8</text><text x="1490" y="324" fill="#f3f0f2">9</text>
-    <text x="1080" y="358" fill="#f3f0f2">10</text><text x="1150" y="358" fill="#f3f0f2">11</text><text x="1220" y="358" fill="#f3f0f2">12</text><text x="1290" y="358" fill="#f3f0f2">13</text><text x="1360" y="358" fill="#f3f0f2">14</text><text x="1430" y="358" fill="#f3f0f2">15</text>
-    <circle cx="1490" cy="353" r="18" fill="#f04b9a"/><text x="1490" y="358" fill="#17191d" font-weight="700">16</text>
-    <rect x="1060" y="370" width="40" height="28" rx="12" fill="#f04b9a" fill-opacity=".22" stroke="#f04b9a"/><text x="1080" y="389" fill="#f3f0f2" font-weight="700">17</text>
-    <rect x="1130" y="370" width="40" height="28" rx="12" fill="#f04b9a" fill-opacity=".42" stroke="#f04b9a"/><text x="1150" y="389" fill="#f3f0f2" font-weight="700">18</text>
-    <text x="1220" y="389" fill="#f3f0f2">19</text><rect x="1270" y="370" width="40" height="28" rx="12" fill="#f04b9a" fill-opacity=".22" stroke="#f04b9a"/><text x="1290" y="389" fill="#f3f0f2" font-weight="700">20</text><text x="1360" y="389" fill="#f3f0f2">21</text><rect x="1410" y="370" width="40" height="28" rx="12" fill="#f04b9a" fill-opacity=".22" stroke="#f04b9a"/><text x="1430" y="389" fill="#f3f0f2" font-weight="700">22</text><text x="1490" y="389" fill="#f3f0f2">23</text>
+  <g fill="#aaa5ac" font-family="Inter, sans-serif" font-size="20" text-anchor="middle">
+    <text x="1280" y="40">󰋀</text><text x="1330" y="40">󰂯</text><text x="1380" y="40">󰖩</text><text x="1430" y="40">󰕾</text><text x="1480" y="40">󰃭</text><text x="1530" y="40">19:00</text>
   </g>
 
-  <text x="1052" y="442" fill="#817b86" font-family="Inter, sans-serif" font-size="11" font-weight="700" letter-spacing="1.2">FECHA</text>
-  <text x="1140" y="442" fill="#817b86" font-family="Inter, sans-serif" font-size="11" font-weight="700" letter-spacing="1.2">HORA</text>
-  <text x="1240" y="442" fill="#817b86" font-family="Inter, sans-serif" font-size="11" font-weight="700" letter-spacing="1.2">EVENTO</text>
+  <rect x="1010" y="88" width="520" height="790" rx="20" fill="#17161e" stroke="#e0228f" stroke-opacity=".72" filter="url(#shadow)"/>
+  <text x="1050" y="136" fill="#e0228f" font-family="Inter, sans-serif" font-size="18" font-weight="800" letter-spacing="4">AGENDA</text>
+  <text x="1050" y="161" fill="#aaa5ac" font-family="Inter, sans-serif" font-size="15">3 eventos en la vista</text>
+  <text x="1440" y="139" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="22">↻</text><text x="1480" y="139" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="24">×</text>
+  <line x1="1050" y1="180" x2="1490" y2="180" stroke="#e0228f" stroke-opacity=".45"/>
+
+  <g font-family="Inter, sans-serif" font-size="15" font-weight="700" text-anchor="middle">
+    <rect x="1050" y="202" width="140" height="38" rx="9" fill="#f3f0f2" fill-opacity=".07"/><text x="1120" y="226" fill="#aaa5ac">DÍA</text>
+    <rect x="1200" y="202" width="140" height="38" rx="9" fill="#e0228f" fill-opacity=".24"/><text x="1270" y="226" fill="#e0228f">SEMANA</text>
+    <rect x="1350" y="202" width="140" height="38" rx="9" fill="#f3f0f2" fill-opacity=".07"/><text x="1420" y="226" fill="#aaa5ac">MES</text>
+  </g>
+
+  <text x="1070" y="284" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="24">‹</text>
+  <text x="1270" y="284" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="17" font-weight="700" text-anchor="middle">LUN AGO 24 – DOM AGO 30</text>
+  <text x="1470" y="284" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="24">›</text>
+  <rect x="1050" y="303" width="66" height="30" rx="8" fill="#e0228f" fill-opacity=".18"/><text x="1083" y="323" fill="#e0228f" font-family="Inter, sans-serif" font-size="13" font-weight="700" text-anchor="middle">HOY</text>
+  <text x="1130" y="323" fill="#817b86" font-family="Inter, sans-serif" font-size="13">Actualizado 19:00 · Trabajo</text>
+
+  <text x="1050" y="377" fill="#e0228f" font-family="Inter, sans-serif" font-size="14" font-weight="800" letter-spacing="2">LUN AGO 24</text>
   <g font-family="Inter, sans-serif">
-    <rect x="1052" y="458" width="446" height="52" rx="12" fill="#f3f0f2" fill-opacity=".06"/>
-    <text x="1068" y="490" fill="#f04b9a" font-size="14" font-weight="800">MAR 18</text><text x="1140" y="490" fill="#f3f0f2" font-size="15" font-weight="700">11:00</text><text x="1240" y="490" fill="#f3f0f2" font-size="14">Reunión de coordinación</text>
-    <rect x="1052" y="520" width="446" height="52" rx="12" fill="#f3f0f2" fill-opacity=".06"/>
-    <text x="1068" y="552" fill="#f04b9a" font-size="14" font-weight="800">MAR 18</text><text x="1140" y="552" fill="#f3f0f2" font-size="15" font-weight="700">16:45</text><text x="1240" y="552" fill="#f3f0f2" font-size="14">Seguimiento de proyecto</text>
+    <rect x="1050" y="394" width="440" height="68" rx="10" fill="#f3f0f2" fill-opacity=".07"/>
+    <text x="1066" y="422" fill="#817b86" font-size="14">09:00</text><text x="1142" y="422" fill="#f3f0f2" font-size="16" font-weight="700">Reunión de coordinación</text><text x="1142" y="446" fill="#817b86" font-size="13">Trabajo · Sala 2</text>
   </g>
-  <text x="1052" y="650" fill="#817b86" font-family="Inter, sans-serif" font-size="13">Private iCalendar • no API keys</text>
-  <text x="72" y="820" fill="#f3f0f2" font-family="Inter, sans-serif" font-size="64" font-weight="800">Desktop Agenda</text>
-  <text x="77" y="872" fill="#aaa5ac" font-family="Inter, sans-serif" font-size="26">Your meetings, quietly visible.</text>
+  <text x="1050" y="505" fill="#e0228f" font-family="Inter, sans-serif" font-size="14" font-weight="800" letter-spacing="2">MAR AGO 25</text>
+  <g font-family="Inter, sans-serif">
+    <rect x="1050" y="522" width="440" height="68" rx="10" fill="#f3f0f2" fill-opacity=".07"/>
+    <text x="1066" y="550" fill="#817b86" font-size="14">16:45</text><text x="1142" y="550" fill="#f3f0f2" font-size="16" font-weight="700">Seguimiento de proyecto</text><text x="1142" y="574" fill="#817b86" font-size="13">Trabajo · Meet</text>
+  </g>
+  <text x="1050" y="633" fill="#e0228f" font-family="Inter, sans-serif" font-size="14" font-weight="800" letter-spacing="2">JUE AGO 28</text>
+  <g font-family="Inter, sans-serif">
+    <rect x="1050" y="650" width="440" height="68" rx="10" fill="#f3f0f2" fill-opacity=".07"/>
+    <text x="1066" y="678" fill="#e0228f" font-size="14" font-weight="800">TODO EL DÍA</text><text x="1160" y="678" fill="#f3f0f2" font-size="16" font-weight="700">Planificación trimestral</text><text x="1160" y="702" fill="#817b86" font-size="13">Personal</text>
+  </g>
+  <text x="1050" y="800" fill="#817b86" font-family="Inter, sans-serif" font-size="13">D / W / M cambiar vista · R actualizar</text>
 </svg>

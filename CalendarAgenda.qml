@@ -1,31 +1,30 @@
+import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Wayland
-
-import QtQuick
 import qs.Commons
 import qs.Ui
 
-Item {
+BarWidget {
   id: root
+  moduleName: "io.github.brm-src.calendar-agenda"
+
+  property string uiLanguage: Qt.locale().name.toLowerCase().startsWith("es") ? "es" : "en"
+  readonly property bool isSpanish: uiLanguage === "es"
+  function words(es, en) { return root.isSpanish ? es : en }
 
   property var events: []
   property string errorMessage: ""
-  property bool collapsed: false
-  property bool expanded: false
-  property string selectedDate: ""
-  property date shownMonth: new Date()
-  readonly property var activeWindow: ToplevelManager.activeToplevel
-  readonly property bool desktopVisible: !activeWindow
-  property var calendarNames: []
+  property string updatedAt: ""
+  property string lastCalendarSummary: ""
+  property string viewMode: "week"
+  property date anchorDate: new Date()
+  property bool panelOpen: false
+  property bool loading: false
+
   readonly property string eventScript: Qt.resolvedUrl("calendar_events.py").toString().replace("file://", "")
-  readonly property var monthNames: ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-  readonly property var weekdayNames: ["L", "M", "X", "J", "V", "S", "D"]
-  readonly property var calendarCells: buildMonthCells(shownMonth)
-  readonly property var displayedEvents: selectedDate === ""
-    ? events
-    : events.filter(function(event) { return String(event.date || "") === selectedDate })
-  readonly property int visibleEventCount: expanded ? displayedEvents.length : Math.min(displayedEvents.length, 4)
+  readonly property bool opened: root.panelOpen
+  readonly property var displayRows: buildRows()
+  readonly property int visibleEventCount: countEvents(displayRows)
 
   function pad2(value) { return value < 10 ? "0" + value : String(value) }
 
@@ -33,497 +32,559 @@ Item {
     return value.getFullYear() + "-" + pad2(value.getMonth() + 1) + "-" + pad2(value.getDate())
   }
 
-  function buildMonthCells(month) {
-    var first = new Date(month.getFullYear(), month.getMonth(), 1)
-    var mondayOffset = (first.getDay() + 6) % 7
-    var cells = []
-    for (var i = 0; i < 42; i++) {
-      var value = new Date(month.getFullYear(), month.getMonth(), 1 + i - mondayOffset)
-      cells.push({
-        date: dateKey(value),
-        day: value.getDate(),
-        inMonth: value.getMonth() === month.getMonth()
-      })
-    }
-    return cells
+  function dateForKey(value) {
+    var parts = String(value || "").split("-")
+    if (parts.length !== 3) return new Date(NaN)
+    var date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+    return dateKey(date) === String(value) ? date : new Date(NaN)
   }
 
-  function eventOnDate(date) {
+  function startOfWeek(value) {
+    var result = new Date(value.getFullYear(), value.getMonth(), value.getDate())
+    result.setDate(result.getDate() - ((result.getDay() + 6) % 7))
+    return result
+  }
+
+  function rangeFor(mode, value) {
+    var start
+    var end
+    if (mode === "month") {
+      start = new Date(value.getFullYear(), value.getMonth(), 1)
+      end = new Date(value.getFullYear(), value.getMonth() + 1, 1)
+    } else if (mode === "week") {
+      start = startOfWeek(value)
+      end = new Date(start)
+      end.setDate(end.getDate() + 7)
+    } else {
+      start = new Date(value.getFullYear(), value.getMonth(), value.getDate())
+      end = new Date(start)
+      end.setDate(end.getDate() + 1)
+    }
+    return { start: start, end: end }
+  }
+
+  function movedAnchor(amount) {
+    var next = new Date(anchorDate)
+    if (viewMode === "month") return new Date(next.getFullYear(), next.getMonth() + amount, 1)
+    next.setDate(next.getDate() + (viewMode === "week" ? amount * 7 : amount))
+    return next
+  }
+
+  function canMove(amount) {
+    var range = rangeFor(viewMode, movedAnchor(amount))
+    var start = new Date()
+    start.setHours(0, 0, 0, 0)
+    var end = new Date(start)
+    end.setDate(end.getDate() + 30)
+    return range.end > start && range.start <= end
+  }
+
+  function formatDate(value, markToday) {
+    var date = dateForKey(value)
+    if (isNaN(date.getTime())) return String(value || "")
+    if (markToday === true && dateKey(date) === dateKey(new Date())) return words("HOY", "TODAY")
+    var days = isSpanish
+      ? ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"]
+      : ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
+    var months = isSpanish
+      ? ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
+      : ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+    return days[date.getDay()] + " " + months[date.getMonth()] + " " + date.getDate()
+  }
+
+  function formatClock(value) {
+    var match = String(value || "").match(/T(\d{2}):(\d{2})/)
+    return match ? match[1] + ":" + match[2] : ""
+  }
+
+  function viewTitle() {
+    var range = rangeFor(viewMode, anchorDate)
+    if (viewMode === "day") return formatDate(dateKey(range.start), true)
+    if (viewMode === "month") {
+      var monthNames = isSpanish
+        ? ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
+        : ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
+      return monthNames[anchorDate.getMonth()] + " " + anchorDate.getFullYear()
+    }
+    var last = new Date(range.end)
+    last.setDate(last.getDate() - 1)
+    return formatDate(dateKey(range.start), false) + " – " + formatDate(dateKey(last), false)
+  }
+
+  function eventSort(a, b) {
+    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1
+    var at = String(a.time || "")
+    var bt = String(b.time || "")
+    if (at !== bt) return at.localeCompare(bt)
+    return String(a.title || "").localeCompare(String(b.title || ""))
+  }
+
+  function buildRows() {
+    var range = rangeFor(viewMode, anchorDate)
+    var grouped = {}
+    var keys = []
     for (var i = 0; i < events.length; i++) {
-      if (String(events[i].date || "") === date) return true
+      var event = events[i]
+      var key = String(event.date || "")
+      var eventDate = dateForKey(key)
+      if (isNaN(eventDate.getTime()) || eventDate < range.start || eventDate >= range.end) continue
+      if (!grouped[key]) {
+        grouped[key] = []
+        keys.push(key)
+      }
+      grouped[key].push(event)
     }
-    return false
-  }
-
-  function todayDate(date) {
-    var now = new Date()
-    return date === dateKey(now)
-  }
-
-  function selectedDayLabel() {
-    for (var i = 0; i < events.length; i++) {
-      if (String(events[i].date || "") === selectedDate) return String(events[i].day || selectedDate)
+    keys.sort()
+    var rows = []
+    for (var j = 0; j < keys.length; j++) {
+      var dayEvents = grouped[keys[j]]
+      dayEvents.sort(eventSort)
+      rows.push({ kind: "header", key: keys[j], label: formatDate(keys[j], viewMode === "day") })
+      for (var k = 0; k < dayEvents.length; k++)
+        rows.push({ kind: "event", event: dayEvents[k] })
     }
-    return selectedDate
+    return rows
   }
 
-  function monthLabel() {
-    return monthNames[shownMonth.getMonth()] + " " + shownMonth.getFullYear()
+  function countEvents(rows) {
+    var count = 0
+    for (var i = 0; i < rows.length; i++) if (rows[i].kind === "event") count++
+    return count
   }
 
-  function moveMonth(delta) {
-    shownMonth = new Date(shownMonth.getFullYear(), shownMonth.getMonth() + delta, 1)
+  function emptyMessage() {
+    if (errorMessage !== "") return errorMessage
+    if (viewMode === "day") return words("No hay eventos para este día.", "No events on this day.")
+    if (viewMode === "month") return words("No hay eventos en este mes.", "No events this month.")
+    return words("No hay eventos en esta semana.", "No events this week.")
   }
 
   function refresh() {
-    if (!calendarProc.running) calendarProc.running = true
-  }
-
-  function openEvent(url) {
-    if (!url) return
-    Quickshell.execDetached(["xdg-open", url])
-  }
-
-  function openDay(date) {
-    var value = String(date || "")
-    if (!value) return
-    var parts = value.split("-")
-    if (parts.length !== 3) return
-    var next = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]) + 1)
-    var start = parts.join("") + "T000000"
-    var end = next.getFullYear() + pad2(next.getMonth() + 1) + pad2(next.getDate()) + "T000000"
-    Quickshell.execDetached(["xdg-open", "https://calendar.google.com/calendar/u/0/r/eventedit?dates=" + start + "/" + end])
-  }
-
-  function selectDay(date) {
-    if (eventOnDate(date)) {
-      selectedDate = selectedDate === date ? "" : date
-      expanded = true
-      collapsed = false
-    } else {
-      openDay(date)
-    }
+    if (calendarProc.running) return
+    loading = true
+    errorMessage = ""
+    calendarProc.command = ["python3", eventScript, "--lang", uiLanguage]
+    calendarProc.running = true
   }
 
   function applyPayload(raw) {
     try {
       var payload = JSON.parse(String(raw || "{}"))
-      events = payload.events || []
-      errorMessage = payload.error || ""
-      calendarNames = payload.calendars || []
-      if (selectedDate !== "" && !eventOnDate(selectedDate)) selectedDate = ""
-    } catch (e) {
+      var nextEvents = Array.isArray(payload.events) ? payload.events.slice(0, 64) : []
+      events = nextEvents
+      errorMessage = String(payload.error || "")
+      updatedAt = String(payload.updated || "")
+      var calendars = Array.isArray(payload.calendars) ? payload.calendars.slice(0, 16) : []
+      lastCalendarSummary = calendars.join(", ")
+    } catch (error) {
       events = []
-      calendarNames = []
-      errorMessage = "No se pudo leer el calendario"
+      errorMessage = words("No se pudo leer el calendario.", "Could not read calendar data.")
+      updatedAt = ""
+      lastCalendarSummary = ""
     }
   }
 
-  function toggleExpanded() {
-    expanded = !expanded
-    if (expanded) collapsed = false
+  function openEvent(url) {
+    var value = String(url || "")
+    if (value !== "") Quickshell.execDetached(["xdg-open", value])
   }
 
-  Component.onCompleted: refresh()
+  function setMode(mode) {
+    viewMode = mode
+    if (mode === "day") anchorDate = new Date()
+  }
+
+  function move(amount) {
+    if (root.canMove(amount)) anchorDate = movedAnchor(amount)
+  }
+
+  function goToToday() {
+    anchorDate = new Date()
+    viewMode = "week"
+  }
+
+  function togglePanel() {
+    panelOpen = !panelOpen
+    if (panelOpen) {
+      refresh()
+      Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+    }
+  }
+
+  function open() { if (!panelOpen) togglePanel() }
+
+  function close() { closePanel() }
+
+  function toggle() { togglePanel() }
+
+  function closeForPopoutSwitch() { closePanel() }
+
+  function closePanel() { panelOpen = false }
+
+  Component.onCompleted: root.events = []
 
   Timer {
     interval: 300000
     repeat: true
-    running: true
+    running: root.panelOpen
     onTriggered: root.refresh()
   }
 
   Process {
     id: calendarProc
-    command: ["python3", root.eventScript]
     stdout: StdioCollector {
+      waitForEnd: true
       onStreamFinished: root.applyPayload(text)
+    }
+    onExited: function(exitCode) {
+      root.loading = false
+      if (exitCode !== 0 && root.errorMessage === "")
+        root.errorMessage = root.words("No se pudo actualizar el calendario.", "Could not refresh calendar data.")
     }
   }
 
-  Variants {
-    model: Quickshell.screens
+  KeyboardPanel {
+    id: panel
+    anchorItem: button
+    owner: root
+    bar: root.bar
+    open: root.panelOpen
+    centerOnBar: false
+    focusTarget: keyCatcher
+    contentWidth: panel.fittedContentWidth(Style.space(440))
+    contentHeight: panel.fittedContentHeight(Style.space(540))
 
-    PanelWindow {
-      required property var modelData
-      screen: modelData
-      visible: root.desktopVisible
-      anchors { top: true; bottom: true; left: true; right: true }
-      color: "transparent"
-      exclusionMode: ExclusionMode.Ignore
-      WlrLayershell.namespace: "io.github.brm-src.calendar-agenda"
-      WlrLayershell.layer: WlrLayer.Bottom
-      WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-      mask: Region {
-        x: card.x
-        y: card.y
-        width: card.visible ? card.width : 0
-        height: card.visible ? card.height : 0
+    PanelKeyCatcher {
+      id: keyCatcher
+      anchors.fill: parent
+      onCloseRequested: root.closePanel()
+      onTextKey: function(text) {
+        if (text === "d" || text === "D") root.setMode("day")
+        else if (text === "w" || text === "W") root.setMode("week")
+        else if (text === "m" || text === "M") root.setMode("month")
+        else if (text === "t" || text === "T") root.goToToday()
+        else if (text === "[" || text === "{") root.move(-1)
+        else if (text === "]" || text === "}") root.move(1)
+        else if (text === "r" || text === "R") root.refresh()
       }
+    }
 
-      BorderSurface {
-        id: card
-        width: root.expanded ? 420 : 360
-        height: content.implicitHeight + Style.space(24)
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.topMargin: Style.bar.sizeHorizontal + Style.space(12)
-        anchors.rightMargin: Style.gapsOut
-        radius: Style.cornerRadius
-        color: Color.menu.background
-        borderSpec: Border.surfaceSpec("menu", "border", Color.menu.border, Math.max(1, Style.space(2)))
-        visible: root.desktopVisible && (root.events.length > 0 || root.errorMessage !== "")
-        clip: true
+    Flickable {
+      id: scroll
+      anchors.fill: parent
+      anchors.margins: Style.space(16)
+      contentWidth: width
+      contentHeight: contentColumn.implicitHeight
+      clip: true
+      boundsBehavior: Flickable.StopAtBounds
+      interactive: contentHeight > height
 
-        Column {
-          id: content
-          anchors.top: parent.top
-          anchors.left: parent.left
-          anchors.right: parent.right
-          anchors.margins: Style.spacing.panelPadding
-          spacing: Style.spacing.md
+      Column {
+        id: contentColumn
+        width: scroll.width
+        spacing: Style.spacing.md
 
-          // ---- header: bold title + dimmed subtitle, first-party grammar ----
-          Row {
-            id: header
-            width: parent.width
+        Row {
+          width: parent.width
+          spacing: Style.spacing.sm
 
-            Column {
-              width: parent.width - headerActions.width - Style.spacing.md
-              spacing: Style.spacing.xs
-
-              Text {
-                textFormat: Text.PlainText
-                text: "agenda"
-                color: Color.menu.text
-                font.family: Style.font.menuFamily
-                font.pixelSize: Style.font.title
-                font.bold: true
-              }
-
-              Text {
-                textFormat: Text.PlainText
-                width: parent.width
-                text: root.expanded && root.selectedDate !== ""
-                  ? "Reuniones del " + root.selectedDayLabel()
-                  : (root.expanded ? "Calendario y agenda" : root.displayedEvents.length > 0
-                    ? root.displayedEvents.length + (root.displayedEvents.length === 1 ? " evento próximo" : " eventos próximos")
-                    : "Sin eventos próximos")
-                color: Color.menu.text
-                opacity: 0.62
-                font.family: Style.font.menuFamily
-                font.pixelSize: Style.font.bodySmall
-                elide: Text.ElideRight
-                maximumLineCount: 1
-              }
-            }
-
-            Row {
-              id: headerActions
-              anchors.verticalCenter: parent.verticalCenter
-              spacing: Style.spacing.xs
-
-              PanelActionButton {
-                size: Style.space(24)
-                iconText: root.collapsed ? "▸" : (root.expanded ? "−" : "+")
-                foreground: Color.menu.text
-                fontFamily: Style.font.menuFamily
-                tooltipText: root.collapsed ? "Expandir" : (root.expanded ? "Contraer calendario" : "Ver calendario")
-                onClicked: {
-                  if (root.collapsed) root.collapsed = false
-                  else root.toggleExpanded()
-                }
-              }
-
-              PanelActionButton {
-                size: Style.space(24)
-                iconText: "↻"
-                foreground: Color.menu.text
-                fontFamily: Style.font.menuFamily
-                tooltipText: "Actualizar"
-                onClicked: root.refresh()
-              }
-            }
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "󰃭"
+            color: Color.accent
+            font.family: Style.font.menuFamily
+            font.pixelSize: Style.font.subtitle
           }
 
-          // ---- collapsed: single summary row ----
-          CursorSurface {
-            visible: root.collapsed
-            width: parent.width
-            height: collapsedRow.implicitHeight + Style.spacing.rowPaddingX * 2
-            foreground: Color.menu.text
-            accent: Color.accent
-            radius: Style.cornerRadius
-
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onClicked: { root.collapsed = false }
-            }
-
-            Row {
-              id: collapsedRow
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: Style.space(10)
-              anchors.rightMargin: Style.space(10)
-              spacing: Style.spacing.sm
-
-              Text {
-                width: 62
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.displayedEvents.length > 0 ? root.displayedEvents[0].day : ""
-                textFormat: Text.PlainText
-                color: Color.accent
-                font.family: Style.font.menuFamily
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                elide: Text.ElideRight
-              }
-
-              Text {
-                width: 84
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.displayedEvents.length > 0 ? root.displayedEvents[0].time : ""
-                textFormat: Text.PlainText
-                color: Color.menu.text
-                font.family: Style.font.menuFamily
-                font.pixelSize: Style.font.body
-                font.bold: true
-              }
-
-              Text {
-                width: parent.width - 62 - 84 - parent.spacing * 2
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.displayedEvents.length > 0
-                  ? (root.displayedEvents[0].allDay ? "• " + root.displayedEvents[0].title : root.displayedEvents[0].title)
-                  : root.errorMessage
-                textFormat: Text.PlainText
-                color: Color.menu.text
-                font.family: Style.font.menuFamily
-                font.pixelSize: Style.font.body
-                elide: Text.ElideRight
-                maximumLineCount: 1
-              }
-            }
-          }
-
-          // ---- expanded content ----
           Column {
-            visible: !root.collapsed
-            width: parent.width
-            spacing: Style.spacing.sm
-
-            PanelSeparator { foreground: Color.menu.text }
-
-            // CALENDAR section (small-caps header)
-            Column {
-              visible: root.expanded
-              width: parent.width
-              spacing: Style.spacing.xs
-
-              PanelSectionHeader {
-                width: parent.width
-                foreground: Color.menu.text
-                fontFamily: Style.font.menuFamily
-                text: "CALENDARIO"
-              }
-
-              Row {
-                width: parent.width
-                height: Style.space(24)
-
-                PanelActionButton {
-                  id: monthPrevious
-                  size: Style.space(22)
-                  iconText: "‹"
-                  foreground: Color.menu.text
-                  fontFamily: Style.font.menuFamily
-                  tooltipText: "Mes anterior"
-                  onClicked: root.moveMonth(-1)
-                }
-
-                Text {
-                  width: parent.width - monthNext.width - monthPrevious.width
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: root.monthLabel()
-                  textFormat: Text.PlainText
-                  color: Color.menu.text
-                  font.family: Style.font.menuFamily
-                  font.pixelSize: Style.font.body
-                  font.bold: true
-                  horizontalAlignment: Text.AlignHCenter
-                }
-
-                PanelActionButton {
-                  id: monthNext
-                  size: Style.space(22)
-                  iconText: "›"
-                  foreground: Color.menu.text
-                  fontFamily: Style.font.menuFamily
-                  tooltipText: "Mes siguiente"
-                  onClicked: root.moveMonth(1)
-                }
-              }
-
-              Grid {
-                id: weekdayGrid
-                width: parent.width
-                columns: 7
-                columnSpacing: Style.spacing.xs
-
-                Repeater {
-                  model: root.weekdayNames
-                  Text {
-                    required property string modelData
-                    width: (weekdayGrid.width - Style.spacing.xs * 6) / 7
-                    height: Style.space(16)
-                    text: modelData
-                    color: Color.menu.text
-                    opacity: 0.48
-                    font.family: Style.font.menuFamily
-                    font.pixelSize: Style.font.caption
-                    font.bold: true
-                    horizontalAlignment: Text.AlignHCenter
-                  }
-                }
-              }
-
-              Grid {
-                id: calendarGrid
-                width: parent.width
-                columns: 7
-                columnSpacing: Style.spacing.xs
-                rowSpacing: Style.spacing.xs
-
-                Repeater {
-                  model: root.calendarCells
-                  Rectangle {
-                    required property var modelData
-                    width: (calendarGrid.width - Style.spacing.xs * 6) / 7
-                    height: Style.space(24)
-                    radius: Style.cornerRadius
-                    color: dayMouse.containsMouse || root.selectedDate === modelData.date
-                      ? Style.hoverFillFor(Color.menu.text, Color.accent)
-                      : (root.todayDate(modelData.date)
-                      ? Color.accent
-                      : (root.eventOnDate(modelData.date) ? Util.alpha(Color.accent, 0.20) : "transparent"))
-                    border.width: root.eventOnDate(modelData.date) && !root.todayDate(modelData.date) ? 1 : 0
-                    border.color: Util.alpha(Color.accent, 0.65)
-
-                    Text {
-                      anchors.centerIn: parent
-                      text: modelData.day
-                      textFormat: Text.PlainText
-                      color: root.todayDate(modelData.date) || root.selectedDate === modelData.date
-                        ? Color.background
-                        : (modelData.inMonth ? Color.menu.text : Util.alpha(Color.menu.text, 0.28))
-                      font.family: Style.font.menuFamily
-                      font.pixelSize: Style.font.caption
-                      font.bold: root.todayDate(modelData.date) || root.eventOnDate(modelData.date)
-                    }
-
-                    MouseArea {
-                      id: dayMouse
-                      anchors.fill: parent
-                      hoverEnabled: true
-                      cursorShape: Qt.PointingHandCursor
-                      onClicked: root.selectDay(modelData.date)
-                    }
-                  }
-                }
-              }
+            width: parent.width - headerActions.width - Style.spacing.sm - Style.space(28)
+            spacing: 1
+            Text {
+              textFormat: Text.PlainText
+              text: root.words("AGENDA", "AGENDA")
+              color: Color.menu.text
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.title
+              font.bold: true
+              font.letterSpacing: 1.3
             }
-
-            // EVENTS section (small-caps header)
-            PanelSectionHeader {
+            Text {
               width: parent.width
-              visible: root.displayedEvents.length > 0
+              textFormat: Text.PlainText
+              text: root.loading
+                ? root.words("Actualizando…", "Refreshing…")
+                : (root.visibleEventCount > 0
+                  ? root.visibleEventCount + " " + root.words("eventos en la vista", "events in view")
+                  : root.words("Calendario privado", "Private calendar"))
+              color: Util.alpha(Color.menu.text, 0.55)
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.caption
+              elide: Text.ElideRight
+            }
+          }
+
+          Row {
+            id: headerActions
+            spacing: Style.spacing.xs
+            anchors.verticalCenter: parent.verticalCenter
+
+            PanelActionButton {
+              size: Style.space(24)
+              iconText: "↻"
               foreground: Color.menu.text
               fontFamily: Style.font.menuFamily
-              text: root.expanded && root.selectedDate !== ""
-                ? "EVENTOS DEL " + root.selectedDayLabel().toUpperCase()
-                : "PRÓXIMOS EVENTOS"
+              tooltipText: root.words("Actualizar (R)", "Refresh (R)")
+              enabled: !root.loading
+              onClicked: root.refresh()
             }
-
-            Repeater {
-              model: root.visibleEventCount
-              delegate: CursorSurface {
-                required property int index
-                width: parent.width
-                height: eventRowContent.implicitHeight + Style.spacing.rowPaddingX * 2
-                foreground: Color.menu.text
-                accent: Color.accent
-                radius: Style.cornerRadius
-
-                MouseArea {
-                  anchors.fill: parent
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: root.openEvent(String(root.displayedEvents[index].url || ""))
-                }
-
-                Row {
-                  id: eventRowContent
-                  anchors.left: parent.left
-                  anchors.right: parent.right
-                  anchors.verticalCenter: parent.verticalCenter
-                  anchors.leftMargin: Style.space(10)
-                  anchors.rightMargin: Style.space(10)
-                  spacing: Style.spacing.sm
-
-                  Text {
-                    width: 62
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root.displayedEvents[index].day
-                    textFormat: Text.PlainText
-                    color: Color.accent
-                    font.family: Style.font.menuFamily
-                    font.pixelSize: Style.font.caption
-                    font.bold: true
-                    elide: Text.ElideRight
-                  }
-
-                  Text {
-                    width: 84
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root.displayedEvents[index].time
-                    textFormat: Text.PlainText
-                    color: Color.menu.text
-                    font.family: Style.font.menuFamily
-                    font.pixelSize: Style.font.body
-                    font.bold: true
-                  }
-
-                  Text {
-                    width: parent.width - 62 - 84 - parent.spacing * 2
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root.displayedEvents[index].allDay ? "• " + root.displayedEvents[index].title : root.displayedEvents[index].title
-                    textFormat: Text.PlainText
-                    color: Color.menu.text
-                    font.family: Style.font.menuFamily
-                    font.pixelSize: Style.font.body
-                    elide: Text.ElideRight
-                    maximumLineCount: 1
-                  }
-                }
-              }
-            }
-
-            Text {
-              visible: root.displayedEvents.length === 0
-              text: root.errorMessage !== "" ? root.errorMessage : "Sin eventos en los próximos 30 días"
-              textFormat: Text.PlainText
-              color: Color.menu.text
-              opacity: 0.45
-              font.family: Style.font.menuFamily
-              font.pixelSize: Style.font.bodySmall
-              wrapMode: Text.Wrap
-              width: parent.width
+            PanelActionButton {
+              size: Style.space(24)
+              iconText: "×"
+              foreground: Color.menu.text
+              fontFamily: Style.font.menuFamily
+              tooltipText: root.words("Cerrar", "Close")
+              onClicked: root.closePanel()
             }
           }
         }
+
+        PanelSeparator { foreground: Color.menu.text }
+
+        ButtonGroup {
+          width: parent.width
+          focusable: false
+          foreground: Color.menu.text
+          background: Color.menu.background
+          accent: Color.accent
+          fontFamily: Style.font.menuFamily
+          value: root.viewMode
+          options: [
+            { value: "day", label: root.words("DÍA", "DAY") },
+            { value: "week", label: root.words("SEMANA", "WEEK") },
+            { value: "month", label: root.words("MES", "MONTH") }
+          ]
+          onChanged: root.setMode(value)
+        }
+
+        Row {
+          width: parent.width
+          height: Style.space(30)
+
+          PanelActionButton {
+            size: Style.space(28)
+            iconText: "‹"
+            enabled: root.canMove(-1)
+            foreground: Color.menu.text
+            fontFamily: Style.font.menuFamily
+            tooltipText: root.words("Anterior ([)", "Previous ([)")
+            onClicked: root.move(-1)
+          }
+
+          Text {
+            width: parent.width - Style.space(56)
+            height: parent.height
+            textFormat: Text.PlainText
+            text: root.viewTitle()
+            color: Color.menu.text
+            font.family: Style.font.menuFamily
+            font.pixelSize: Style.font.body
+            font.bold: true
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+          }
+
+          PanelActionButton {
+            size: Style.space(28)
+            iconText: "›"
+            enabled: root.canMove(1)
+            foreground: Color.menu.text
+            fontFamily: Style.font.menuFamily
+            tooltipText: root.words("Siguiente (])", "Next (])")
+            onClicked: root.move(1)
+          }
+        }
+
+        Row {
+          width: parent.width
+          spacing: Style.spacing.sm
+
+          Button {
+            text: root.words("Hoy", "Today")
+            active: true
+            enabled: root.viewMode !== "week" || dateKey(root.anchorDate) !== dateKey(new Date())
+            onClicked: root.goToToday()
+          }
+
+          Text {
+            width: parent.width - Style.space(72) - parent.spacing
+            textFormat: Text.PlainText
+            text: root.updatedAt !== ""
+              ? root.words("Actualizado", "Updated") + " " + root.formatClock(root.updatedAt)
+                + (root.lastCalendarSummary !== "" ? "  ·  " + root.lastCalendarSummary : "")
+              : ""
+            color: Util.alpha(Color.menu.text, 0.45)
+            font.family: Style.font.menuFamily
+            font.pixelSize: Style.font.caption
+            elide: Text.ElideRight
+            verticalAlignment: Text.AlignVCenter
+          }
+        }
+
+        Text {
+          visible: root.errorMessage !== "" && root.visibleEventCount > 0
+          width: parent.width
+          textFormat: Text.PlainText
+          text: "⚠ " + root.errorMessage
+          color: Color.accent
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+        }
+
+        ListView {
+          id: eventList
+          width: parent.width
+          height: Math.max(Style.space(74), Math.min(Style.space(360), contentHeight))
+          model: root.displayRows
+          spacing: Style.space(6)
+          clip: true
+          boundsBehavior: Flickable.StopAtBounds
+          interactive: contentHeight > height
+
+          delegate: Item {
+            required property var modelData
+            width: eventList.width
+            height: modelData.kind === "header"
+              ? Style.space(22)
+              : (modelData.event.location || modelData.event.allDay ? Style.space(74) : Style.space(58))
+
+            Text {
+              visible: modelData.kind === "header"
+              anchors.left: parent.left
+              anchors.right: parent.right
+              height: parent.height
+              textFormat: Text.PlainText
+              text: modelData.label
+              color: Color.accent
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              font.letterSpacing: 1.2
+              verticalAlignment: Text.AlignVCenter
+            }
+
+            CursorSurface {
+              id: eventSurface
+              visible: modelData.kind === "event"
+              anchors.fill: parent
+              foreground: Color.menu.text
+              accent: Color.accent
+              radius: Style.cornerRadius
+
+              Row {
+                anchors.fill: parent
+                anchors.leftMargin: Style.space(9)
+                anchors.rightMargin: Style.space(9)
+                spacing: Style.spacing.sm
+
+                Text {
+                  width: Style.space(82)
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: modelData.event.allDay ? root.words("TODO EL DÍA", "ALL DAY") : String(modelData.event.time || "")
+                  color: modelData.event.allDay ? Color.accent : Util.alpha(Color.menu.text, 0.6)
+                  font.family: Style.font.menuFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: modelData.event.allDay
+                  wrapMode: Text.Wrap
+                  maximumLineCount: 2
+                }
+
+                Column {
+                  width: parent.width - Style.space(82) - parent.spacing
+                  anchors.verticalCenter: parent.verticalCenter
+                  spacing: 1
+
+                  Text {
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    text: String(modelData.event.title || root.words("Sin título", "Untitled"))
+                    color: Color.menu.text
+                    font.family: Style.font.menuFamily
+                    font.pixelSize: Style.font.body
+                    elide: Text.ElideRight
+                  }
+
+                  Text {
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    text: String(modelData.event.calendar || "")
+                      + (modelData.event.location ? "  ·  " + String(modelData.event.location) : "")
+                    color: Util.alpha(Color.menu.text, 0.5)
+                    font.family: Style.font.menuFamily
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
+                  }
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                enabled: modelData.kind === "event" && String(modelData.event.url || "") !== ""
+                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                onClicked: root.openEvent(modelData.event.url)
+              }
+            }
+          }
+        }
+
+        Text {
+          visible: root.visibleEventCount === 0
+          width: parent.width
+          textFormat: Text.PlainText
+          text: root.emptyMessage()
+          color: root.errorMessage !== "" ? Color.accent : Util.alpha(Color.menu.text, 0.55)
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.bodySmall
+          wrapMode: Text.Wrap
+          horizontalAlignment: Text.AlignHCenter
+          topPadding: Style.space(10)
+        }
+
+        Text {
+          width: parent.width
+          textFormat: Text.PlainText
+          text: root.words("Pulsa R para actualizar · clic en un evento para abrir su enlace", "Press R to refresh · click an event to open its link")
+          color: Util.alpha(Color.menu.text, 0.32)
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.caption
+          horizontalAlignment: Text.AlignHCenter
+          wrapMode: Text.Wrap
+        }
       }
+    }
+  }
+
+  implicitWidth: button.implicitWidth
+  implicitHeight: button.implicitHeight
+  visible: true
+
+  BarIconButton {
+    id: button
+    anchors.fill: parent
+    bar: root.bar
+    text: "󰃭"
+    slotSize: Style.bar.statusSlot
+    opticalSize: 17
+    tooltipText: root.words("Agenda de calendario", "Calendar agenda")
+    active: root.opened
+    useActiveColor: true
+    activeColor: Color.accent
+
+    onPressed: function(mouseButton) {
+      if (mouseButton === Qt.MiddleButton) root.refresh()
+      else if (mouseButton === Qt.LeftButton) root.togglePanel()
     }
   }
 }

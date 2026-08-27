@@ -1,8 +1,11 @@
 import importlib.util
 import io
+import json
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 MODULE_PATH = Path(__file__).parents[1] / "calendar_events.py"
 spec = importlib.util.spec_from_file_location("calendar_events", MODULE_PATH)
@@ -45,6 +48,18 @@ END:VCALENDAR
         self.assertEqual(events[0]["date"], "2026-08-14")
         self.assertFalse(events[0]["allDay"])
 
+    def test_extracts_link_from_escaped_description(self):
+        self.assertEqual(
+            module.event_link({"DESCRIPTION": ({}, "Join https://meet.google.com/abc\\nDial-in")}),
+            "https://meet.google.com/abc",
+        )
+
+    def test_extracts_conference_property(self):
+        self.assertEqual(
+            module.event_link({"CONFERENCE": ({}, "https://teams.example.test/meeting/123")}),
+            "https://teams.example.test/meeting/123",
+        )
+
     def test_parses_all_day_event_with_iso_date(self):
         now = datetime.fromisoformat("2026-08-14T09:00:00-04:00")
         ics = """BEGIN:VCALENDAR
@@ -57,6 +72,48 @@ END:VCALENDAR
         events = module.parse_events(ics, now, now.date() + module.timedelta(days=2))
         self.assertEqual(events[0]["date"], "2026-08-15")
         self.assertTrue(events[0]["allDay"])
+
+    def test_expands_multiday_events_and_keeps_today_all_day(self):
+        now = datetime.fromisoformat("2026-08-14T09:00:00-04:00")
+        ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20260813
+DTEND;VALUE=DATE:20260815
+SUMMARY:Retiro\\, equipo
+LOCATION:Casa de campo
+END:VEVENT
+END:VCALENDAR
+"""
+        events = module.parse_events(ics, now, now.date())
+        self.assertEqual([event["date"] for event in events], ["2026-08-14"])
+        self.assertEqual(events[0]["location"], "Casa de campo")
+        self.assertTrue(events[0]["allDay"])
+
+    def test_expands_timed_event_across_midnight(self):
+        now = datetime.fromisoformat("2026-08-14T09:00:00-04:00")
+        ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20260814T230000
+DTEND:20260815T010000
+SUMMARY:Turno nocturno
+END:VEVENT
+END:VCALENDAR
+"""
+        events = module.parse_events(ics, now, now.date() + module.timedelta(days=1))
+        self.assertEqual([event["date"] for event in events], ["2026-08-14", "2026-08-15"])
+
+    def test_expands_duration_based_all_day_event(self):
+        now = datetime.fromisoformat("2026-08-14T09:00:00-04:00")
+        ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20260815
+DURATION:P3D
+SUMMARY:Conferencia
+END:VEVENT
+END:VCALENDAR
+"""
+        events = module.parse_events(ics, now, now.date() + module.timedelta(days=4))
+        self.assertEqual([event["date"] for event in events], ["2026-08-15", "2026-08-16", "2026-08-17"])
 
     def test_keeps_calendar_name_on_events(self):
         now = datetime.fromisoformat("2026-08-14T07:00:00-04:00")
@@ -87,6 +144,46 @@ END:VCALENDAR
                 {"name": "Personal", "icalUrl": "https://two.example/b.ics"},
             ],
         )
+        bounded = module.normalize_calendar_sources(
+            {
+                "calendars": [
+                    {"name": "x" * 200, "icalUrl": f"https://example.test/{index}.ics"}
+                    for index in range(module.MAX_CALENDARS + 2)
+                ]
+            }
+        )
+        self.assertEqual(len(bounded), module.MAX_CALENDARS)
+        self.assertEqual(len(bounded[0]["name"]), module.MAX_CALENDAR_NAME)
+        self.assertEqual(
+            module.normalize_calendar_sources({"icalUrl": "https://x.test/" + "a" * module.MAX_URL_LENGTH}),
+            [],
+        )
+
+    def test_reports_partial_feed_failure_with_valid_events(self):
+        start = datetime.now().astimezone() + module.timedelta(hours=2)
+        ics = f"""BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:{start.strftime("%Y%m%dT%H%M%S")}
+SUMMARY:Evento válido
+END:VEVENT
+END:VCALENDAR
+"""
+        output = io.StringIO()
+        with patch.object(
+            module,
+            "load_config",
+            return_value={
+                "calendars": [
+                    {"name": "Trabajo", "icalUrl": "https://work.example/calendar.ics"},
+                    {"name": "Personal", "icalUrl": "https://personal.example/calendar.ics"},
+                ]
+            },
+        ), patch.object(module, "fetch_calendar", side_effect=[ics, RuntimeError("offline")]), redirect_stdout(output):
+            module.main(["--lang", "en"])
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(len(payload["events"]), 1)
+        self.assertIn("Could not refresh: Personal", payload["error"])
 
     def test_reads_complete_calendar_response_until_safe_limit(self):
         body = b"BEGIN:VCALENDAR\n" + (b"x" * 128)
@@ -95,6 +192,10 @@ END:VCALENDAR
     def test_rejects_calendar_response_over_safe_limit(self):
         with self.assertRaises(ValueError):
             module.read_calendar_response(io.BytesIO(b"x" * (module.MAX_FEED_BYTES + 1)))
+
+    def test_rejects_non_ical_calendar_response(self):
+        with self.assertRaises(ValueError):
+            module.read_calendar_response(io.BytesIO(b"<html>login</html>"))
 
     def test_skips_cancelled_and_expired_events(self):
         now = datetime.fromisoformat("2026-08-14T09:00:00-04:00")
@@ -124,6 +225,19 @@ END:VCALENDAR
 """
         events = module.parse_events(ics, now, now.date().replace(day=31))
         self.assertEqual([event["day"] for event in events], ["HOY", "mié 19", "lun 24"])
+
+    def test_weekly_without_byday_uses_dtstart_weekday(self):
+        now = datetime.fromisoformat("2026-08-17T08:00:00-04:00")
+        ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20260817T100000
+RRULE:FREQ=WEEKLY;COUNT=2
+SUMMARY:Seguimiento semanal
+END:VEVENT
+END:VCALENDAR
+"""
+        events = module.parse_events(ics, now, now.date().replace(day=31))
+        self.assertEqual([event["date"] for event in events], ["2026-08-17", "2026-08-24"])
 
 
 if __name__ == "__main__":

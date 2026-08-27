@@ -2,10 +2,10 @@
 """Read a private iCalendar feed and emit the next desktop agenda events."""
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
-import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
@@ -15,9 +15,19 @@ from zoneinfo import ZoneInfo
 
 CONFIG_PATH = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy" / "calendar-widget" / "config.json"
 HORIZON_DAYS = 30
-MAX_EVENTS = 8
+MAX_EVENTS = 64
 MAX_FEED_BYTES = 8_000_000
+MAX_CALENDARS = 16
+MAX_CALENDAR_NAME = 128
+MAX_URL_LENGTH = 4096
 WEEKDAYS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
+LANG = "es"
+
+
+def _t(es: str, en: str) -> str:
+    return es if LANG == "es" else en
+
+
 BYDAY = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
 
@@ -78,6 +88,16 @@ def parse_until(value: str) -> datetime:
     return parsed
 
 
+def parse_duration(value: str) -> timedelta | None:
+    match = re.fullmatch(
+        r"P(?:(?P<weeks>\d+)W|(?:(?P<days>\d+)D)?(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?)",
+        value.strip().upper(),
+    )
+    if not match or not any(match.group(name) for name in ("weeks", "days", "hours", "minutes", "seconds")):
+        return None
+    return timedelta(**{name: int(match.group(name) or 0) for name in ("weeks", "days", "hours", "minutes", "seconds")})
+
+
 def parse_rrule(value: str) -> dict[str, str]:
     return {key.upper(): raw for key, raw in (part.split("=", 1) for part in value.split(";") if "=" in part)}
 
@@ -100,7 +120,8 @@ def occurrence_dates(start: datetime, rule_value: str, horizon: date) -> Iterabl
             matches = (cursor.date() - start.date()).days % interval == 0
         elif freq == "WEEKLY":
             week_delta = (cursor.date() - start.date()).days // 7
-            matches = week_delta >= 0 and week_delta % interval == 0 and (not bydays or cursor.weekday() in bydays)
+            weekdays = bydays or {start.weekday()}
+            matches = week_delta >= 0 and week_delta % interval == 0 and cursor.weekday() in weekdays
         elif freq == "MONTHLY":
             months = (cursor.year - start.year) * 12 + cursor.month - start.month
             matches = months >= 0 and months % interval == 0 and cursor.day == bymonthday
@@ -117,16 +138,28 @@ def occurrence_dates(start: datetime, rule_value: str, horizon: date) -> Iterabl
         cursor += timedelta(days=1)
 
 
+def active_event_dates(start: datetime, end: datetime | None, all_day: bool, horizon: date) -> Iterable[datetime]:
+    """Yield each calendar day touched by one event, capped by the horizon."""
+    last_date = start.date()
+    if end is not None and end > start:
+        last_date = (end.date() - timedelta(days=1)) if all_day else (end - timedelta(microseconds=1)).date()
+    cursor = start.date()
+    while cursor <= last_date and cursor <= horizon:
+        yield datetime.combine(cursor, start.timetz())
+        cursor += timedelta(days=1)
+
+
 def event_link(values: dict[str, tuple[dict[str, str], str]]) -> str:
-    candidates = [values.get("URL", ({}, ""))[1], values.get("X-GOOGLE-HANGOUT", ({}, ""))[1]]
-    description = values.get("DESCRIPTION", ({}, ""))[1]
-    candidates.append(description)
+    def value(name: str) -> str:
+        return unescape(values.get(name, ({}, ""))[1])
+
+    candidates = [value("URL"), value("X-GOOGLE-HANGOUT"), value("CONFERENCE"), value("DESCRIPTION")]
     pattern = re.compile(r"https?://(?:[\w.-]+\.)?(?:zoom\.us|meet\.google\.com)/[^\s<>\"']+")
     for candidate in candidates:
         match = pattern.search(candidate)
         if match:
             return match.group(0).rstrip(".,;:)]}")
-    return next((value for value in candidates if value.startswith("http")), "")
+    return next((candidate.splitlines()[0] for candidate in candidates if candidate.startswith("http")), "")
 
 
 def parse_events(text: str, now: datetime, horizon: date, calendar_name: str = "") -> list[dict[str, object]]:
@@ -141,22 +174,46 @@ def parse_events(text: str, now: datetime, horizon: date, calendar_name: str = "
                 continue
             start_params, start_value = current["DTSTART"]
             start, all_day = parse_datetime(start_value, start_params)
+            end: datetime | None = None
+            if "DTEND" in current:
+                end_params, end_value = current["DTEND"]
+                try:
+                    end, end_all_day = parse_datetime(end_value, end_params)
+                    if end_all_day != all_day or end <= start:
+                        end = None
+                except ValueError:
+                    end = None
+            if end is None and "DURATION" in current:
+                duration = parse_duration(current["DURATION"][1])
+                if duration and duration > timedelta(0):
+                    end = start + duration
             rule = current.get("RRULE", ({}, ""))[1]
             starts = occurrence_dates(start, rule, horizon) if rule else [start]
             for occurrence in starts:
-                if occurrence < now or occurrence.date() > horizon:
-                    continue
-                day = "HOY" if occurrence.date() == now.date() else "MAÑANA" if occurrence.date() == now.date() + timedelta(days=1) else f"{WEEKDAYS[occurrence.weekday()]} {occurrence.day}"
-                result.append({
-                    "date": occurrence.date().isoformat(),
-                    "day": day,
-                    "time": "TODO EL DÍA" if all_day else occurrence.strftime("%H:%M"),
-                    "allDay": all_day,
-                    "calendar": calendar_name or "Calendario",
-                    "title": unescape(current.get("SUMMARY", ({}, "Sin título"))[1]) or "Sin título",
-                    "url": event_link(current),
-                    "sort": occurrence.isoformat(),
-                })
+                if end is not None:
+                    duration = end - start
+                    occurrence_end = occurrence + duration
+                    if not all_day and occurrence_end <= now:
+                        continue
+                else:
+                    occurrence_end = None
+                    if not all_day and occurrence < now:
+                        continue
+                for active_date in active_event_dates(occurrence, occurrence_end, all_day, horizon):
+                    if active_date.date() < now.date():
+                        continue
+                    day = "HOY" if active_date.date() == now.date() else "MAÑANA" if active_date.date() == now.date() + timedelta(days=1) else f"{WEEKDAYS[active_date.weekday()]} {active_date.day}"
+                    result.append({
+                        "date": active_date.date().isoformat(),
+                        "day": day,
+                        "time": "TODO EL DÍA" if all_day else occurrence.strftime("%H:%M"),
+                        "allDay": all_day,
+                        "calendar": calendar_name or "Calendario",
+                        "location": unescape(current.get("LOCATION", ({}, ""))[1])[:512],
+                        "title": unescape(current.get("SUMMARY", ({}, "Sin título"))[1])[:512] or "Sin título",
+                        "url": event_link(current),
+                        "sort": active_date.isoformat(),
+                    })
             current = None
         elif current is not None and ":" in line:
             name, params, value = property_value(line)
@@ -175,17 +232,19 @@ def normalize_calendar_sources(config: object) -> list[dict[str, str]]:
     if isinstance(raw_calendars, list):
         sources: list[dict[str, str]] = []
         for index, item in enumerate(raw_calendars, start=1):
+            if len(sources) >= MAX_CALENDARS:
+                break
             if not isinstance(item, dict):
                 continue
             url = str(item.get("icalUrl") or item.get("url") or "").strip()
-            if not url:
+            if not url or len(url) > MAX_URL_LENGTH:
                 continue
-            name = str(item.get("name") or f"Calendario {index}").strip()
+            name = str(item.get("name") or f"Calendario {index}").strip()[:MAX_CALENDAR_NAME]
             sources.append({"name": name or f"Calendario {index}", "icalUrl": url})
         return sources
 
     url = str(config.get("icalUrl") or config.get("ical_url") or config.get("url") or "").strip()
-    return [{"name": "Calendario", "icalUrl": url}] if url else []
+    return [{"name": "Calendario", "icalUrl": url}] if url and len(url) <= MAX_URL_LENGTH else []
 
 
 def load_config() -> dict[str, object]:
@@ -216,7 +275,10 @@ def read_calendar_response(response: object) -> str:
     data = response.read(MAX_FEED_BYTES + 1)  # type: ignore[attr-defined]
     if len(data) > MAX_FEED_BYTES:
         raise ValueError("El feed iCalendar supera el límite permitido")
-    return data.decode("utf-8-sig", errors="replace")
+    text = data.decode("utf-8-sig", errors="replace")
+    if "BEGIN:VCALENDAR" not in text:
+        raise ValueError("La respuesta no parece un calendario iCalendar")
+    return text
 
 
 class HTTPSOnlyRedirectHandler(HTTPRedirectHandler):
@@ -226,10 +288,16 @@ class HTTPSOnlyRedirectHandler(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--lang", choices=("es", "en"), default="es")
+    args, _ = parser.parse_known_args(argv)
+    global LANG
+    LANG = args.lang
+
     sources = normalize_calendar_sources(load_config())
     if not sources:
-        json_out(error=f"Configura al menos un calendario en {CONFIG_PATH}", events=[], calendars=[])
+        json_out(error=_t(f"Configura al menos un calendario en {CONFIG_PATH}", f"Configure at least one calendar in {CONFIG_PATH}"), events=[], calendars=[])
         return
 
     now = datetime.now().astimezone()
@@ -247,11 +315,11 @@ def main() -> None:
             errors.append(source["name"])
 
     events.sort(key=lambda item: (str(item.get("date", "")), str(item.get("time", "")), str(item.get("title", ""))))
-    json_out(updated=now.isoformat(), events=events[:MAX_EVENTS], calendars=[source["name"] for source in sources], error=("No se pudo actualizar: " + ", ".join(errors)) if errors and not events else "")
+    json_out(updated=now.isoformat(), events=events[:MAX_EVENTS], calendars=[source["name"] for source in sources], error=(_t("No se pudo actualizar: ", "Could not refresh: ") + ", ".join(errors)) if errors else "")
 
 
 if __name__ == "__main__":
     try:
         main()
     except Exception:
-        json_out(error="No se pudo actualizar el calendario. Revisa la URL privada iCalendar.", events=[])
+        json_out(error=_t("No se pudo actualizar el calendario. Revisa la URL privada iCalendar.", "Could not refresh the calendar. Check the private iCalendar URL."), events=[])
