@@ -208,9 +208,9 @@ def parse_events(text: str, now: datetime, horizon: date, calendar_name: str = "
                         "day": day,
                         "time": "TODO EL DÍA" if all_day else occurrence.strftime("%H:%M"),
                         "allDay": all_day,
-                        "calendar": calendar_name or "Calendario",
+                        "calendar": calendar_name or _t("Calendario", "Calendar"),
                         "location": unescape(current.get("LOCATION", ({}, ""))[1])[:512],
-                        "title": unescape(current.get("SUMMARY", ({}, "Sin título"))[1])[:512] or "Sin título",
+                        "title": unescape(current.get("SUMMARY", ({}, ""))[1])[:512] or _t("Sin título", "Untitled"),
                         "url": event_link(current),
                         "sort": active_date.isoformat(),
                     })
@@ -239,12 +239,13 @@ def normalize_calendar_sources(config: object) -> list[dict[str, str]]:
             url = str(item.get("icalUrl") or item.get("url") or "").strip()
             if not url or len(url) > MAX_URL_LENGTH:
                 continue
-            name = str(item.get("name") or f"Calendario {index}").strip()[:MAX_CALENDAR_NAME]
-            sources.append({"name": name or f"Calendario {index}", "icalUrl": url})
+            default_name = f"{_t('Calendario', 'Calendar')} {index}"
+            name = str(item.get("name") or default_name).strip()[:MAX_CALENDAR_NAME]
+            sources.append({"name": name or default_name, "icalUrl": url})
         return sources
 
     url = str(config.get("icalUrl") or config.get("ical_url") or config.get("url") or "").strip()
-    return [{"name": "Calendario", "icalUrl": url}] if url and len(url) <= MAX_URL_LENGTH else []
+    return [{"name": _t("Calendario", "Calendar"), "icalUrl": url}] if url and len(url) <= MAX_URL_LENGTH else []
 
 
 def load_config() -> dict[str, object]:

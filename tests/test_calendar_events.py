@@ -60,6 +60,23 @@ END:VCALENDAR
             "https://teams.example.test/meeting/123",
         )
 
+    def test_localizes_missing_event_fields_in_english(self):
+        now = datetime.fromisoformat("2026-08-14T09:00:00-04:00")
+        ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20260814T100000
+END:VEVENT
+END:VCALENDAR
+"""
+        previous_language = getattr(module, "LANG")
+        try:
+            setattr(module, "LANG", "en")
+            events = module.parse_events(ics, now, now.date())
+        finally:
+            setattr(module, "LANG", previous_language)
+        self.assertEqual(events[0]["title"], "Untitled")
+        self.assertEqual(events[0]["calendar"], "Calendar")
+
     def test_parses_all_day_event_with_iso_date(self):
         now = datetime.fromisoformat("2026-08-14T09:00:00-04:00")
         ics = """BEGIN:VCALENDAR
@@ -158,6 +175,52 @@ END:VCALENDAR
             module.normalize_calendar_sources({"icalUrl": "https://x.test/" + "a" * module.MAX_URL_LENGTH}),
             [],
         )
+
+    def test_main_localizes_generated_calendar_name_in_english(self):
+        start = datetime.now().astimezone() + module.timedelta(hours=2)
+        ics = f"""BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:{start.strftime("%Y%m%dT%H%M%S")}
+SUMMARY:Planning
+END:VEVENT
+END:VCALENDAR
+"""
+        output = io.StringIO()
+        with patch.object(module, "LANG", "es"), patch.object(
+            module,
+            "load_config",
+            return_value={"icalUrl": "https://example.test/calendar.ics"},
+        ), patch.object(module, "fetch_calendar", return_value=ics), redirect_stdout(output):
+            module.main(["--lang", "en"])
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["calendars"], ["Calendar"])
+        self.assertEqual(payload["events"][0]["calendar"], "Calendar")
+
+    def test_main_localizes_numbered_calendar_name_in_english(self):
+        start = datetime.now().astimezone() + module.timedelta(hours=2)
+        ics = f"""BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:{start.strftime("%Y%m%dT%H%M%S")}
+SUMMARY:Planning
+END:VEVENT
+END:VCALENDAR
+"""
+        output = io.StringIO()
+        with patch.object(module, "LANG", "es"), patch.object(
+            module,
+            "load_config",
+            return_value={
+                "calendars": [
+                    {"icalUrl": "https://example.test/calendar.ics"},
+                ]
+            },
+        ), patch.object(module, "fetch_calendar", return_value=ics), redirect_stdout(output):
+            module.main(["--lang", "en"])
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["calendars"], ["Calendar 1"])
+        self.assertEqual(payload["events"][0]["calendar"], "Calendar 1")
 
     def test_reports_partial_feed_failure_with_valid_events(self):
         start = datetime.now().astimezone() + module.timedelta(hours=2)
