@@ -576,7 +576,6 @@ BarWidget {
     bar: root.bar
     text: "󰃭"
     slotSize: Style.bar.statusSlot
-    opticalSize: 17
     tooltipText: root.words("Agenda de calendario", "Calendar agenda")
     active: root.opened
     useActiveColor: true
