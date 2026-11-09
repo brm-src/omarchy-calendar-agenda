@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import time
 import unittest
 from contextlib import redirect_stdout
 from datetime import datetime
@@ -76,6 +77,55 @@ END:VCALENDAR
             setattr(module, "LANG", previous_language)
         self.assertEqual(events[0]["title"], "Untitled")
         self.assertEqual(events[0]["calendar"], "Calendar")
+
+    def test_override_and_exdate_hide_series_occurrences(self):
+        now = datetime.fromisoformat("2026-08-14T09:00:00-04:00")
+        ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:series
+DTSTART:20260814T110000
+RRULE:FREQ=DAILY;COUNT=4
+EXDATE:20260816T110000
+SUMMARY:Daily
+END:VEVENT
+BEGIN:VEVENT
+UID:series
+RECURRENCE-ID:20260815T110000
+DTSTART:20260815T120000
+SUMMARY:Daily moved
+END:VEVENT
+END:VCALENDAR
+"""
+        events = module.parse_events(ics, now, now.date() + module.timedelta(days=7))
+        self.assertEqual(
+            [(event["date"], event["title"]) for event in events],
+            [("2026-08-14", "Daily"), ("2026-08-15", "Daily moved"), ("2026-08-17", "Daily")],
+        )
+
+    def test_override_matches_series_across_dst(self):
+        now = datetime.fromisoformat("2026-11-09T09:00:00-03:00")
+        ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:weekly
+DTSTART;TZID=America/Santiago:20260519T110000
+RRULE:FREQ=WEEKLY;BYDAY=TU
+SUMMARY:Weekly
+END:VEVENT
+BEGIN:VEVENT
+UID:weekly
+RECURRENCE-ID;TZID=America/Santiago:20261110T110000
+DTSTART;TZID=America/Santiago:20261110T110000
+SUMMARY:Weekly
+END:VEVENT
+END:VCALENDAR
+"""
+        try:
+            with patch.dict(module.os.environ, {"TZ": "America/Santiago"}):
+                time.tzset()
+                events = module.parse_events(ics, now, now.date() + module.timedelta(days=1))
+        finally:
+            time.tzset()
+        self.assertEqual([(event["date"], event["time"]) for event in events], [("2026-11-10", "11:00")])
 
     def test_parses_all_day_event_with_iso_date(self):
         now = datetime.fromisoformat("2026-08-14T09:00:00-04:00")

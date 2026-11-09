@@ -89,7 +89,20 @@ BarWidget {
     var months = isSpanish
       ? ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
       : ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-    return days[date.getDay()] + " " + months[date.getMonth()] + " " + date.getDate()
+    return isSpanish
+      ? days[date.getDay()] + " " + date.getDate() + " " + months[date.getMonth()]
+      : days[date.getDay()] + " " + months[date.getMonth()] + " " + date.getDate()
+  }
+
+  // Calendar name only when several feeds are mixed; a bare meeting URL becomes its service name.
+  function eventMeta(event) {
+    var parts = []
+    if (lastCalendarSummary.indexOf(",") !== -1 && event.calendar) parts.push(String(event.calendar))
+    var location = String(event.location || "")
+    var host = location.match(/^https?:\/\/([^\/?#]+)/i)
+    if (host) location = /zoom\.us$/i.test(host[1]) ? "Zoom" : /meet\.google\.com$/i.test(host[1]) ? "Google Meet" : host[1].replace(/^www\./, "")
+    if (location) parts.push(location)
+    return parts.join("  ·  ")
   }
 
   function formatClock(value) {
@@ -252,7 +265,7 @@ BarWidget {
     centerOnBar: false
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(440))
-    contentHeight: panel.fittedContentHeight(Style.space(540))
+    contentHeight: panel.fittedContentHeight(Math.min(Style.space(540), contentColumn.implicitHeight + Style.space(32)))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -411,13 +424,13 @@ BarWidget {
 
           Button {
             text: root.words("Hoy", "Today")
-            active: true
             enabled: root.viewMode !== "week" || dateKey(root.anchorDate) !== dateKey(new Date())
             onClicked: root.goToToday()
           }
 
           Text {
             width: parent.width - Style.space(72) - parent.spacing
+            anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
             text: root.updatedAt !== ""
               ? root.words("Actualizado", "Updated") + " " + root.formatClock(root.updatedAt)
@@ -454,10 +467,9 @@ BarWidget {
 
           delegate: Item {
             required property var modelData
+            readonly property var entry: modelData.event || ({})
             width: eventList.width
-            height: modelData.kind === "header"
-              ? Style.space(22)
-              : (modelData.event.location || modelData.event.allDay ? Style.space(74) : Style.space(58))
+            height: modelData.kind === "header" ? Style.space(24) : Style.space(44)
 
             Text {
               visible: modelData.kind === "header"
@@ -465,7 +477,7 @@ BarWidget {
               anchors.right: parent.right
               height: parent.height
               textFormat: Text.PlainText
-              text: modelData.label
+              text: modelData.label || ""
               color: Color.accent
               font.family: Style.font.menuFamily
               font.pixelSize: Style.font.caption
@@ -489,27 +501,29 @@ BarWidget {
                 spacing: Style.spacing.sm
 
                 Text {
-                  width: Style.space(82)
-                  anchors.verticalCenter: parent.verticalCenter
+                  width: Style.space(52)
+                  y: eventInfo.y + (eventTitle.height - height) / 2
                   textFormat: Text.PlainText
-                  text: modelData.event.allDay ? root.words("TODO EL DÍA", "ALL DAY") : String(modelData.event.time || "")
-                  color: modelData.event.allDay ? Color.accent : Util.alpha(Color.menu.text, 0.6)
+                  text: entry.allDay ? root.words("TODO EL DÍA", "ALL DAY") : String(entry.time || "")
+                  color: entry.allDay ? Color.accent : Util.alpha(Color.menu.text, 0.6)
                   font.family: Style.font.menuFamily
                   font.pixelSize: Style.font.caption
-                  font.bold: modelData.event.allDay
+                  font.bold: entry.allDay
                   wrapMode: Text.Wrap
                   maximumLineCount: 2
                 }
 
                 Column {
-                  width: parent.width - Style.space(82) - parent.spacing
+                  id: eventInfo
+                  width: parent.width - Style.space(52) - parent.spacing
                   anchors.verticalCenter: parent.verticalCenter
                   spacing: 1
 
                   Text {
+                    id: eventTitle
                     width: parent.width
                     textFormat: Text.PlainText
-                    text: String(modelData.event.title || root.words("Sin título", "Untitled"))
+                    text: String(entry.title || root.words("Sin título", "Untitled"))
                     color: Color.menu.text
                     font.family: Style.font.menuFamily
                     font.pixelSize: Style.font.body
@@ -518,9 +532,9 @@ BarWidget {
 
                   Text {
                     width: parent.width
+                    visible: text !== ""
                     textFormat: Text.PlainText
-                    text: String(modelData.event.calendar || "")
-                      + (modelData.event.location ? "  ·  " + String(modelData.event.location) : "")
+                    text: modelData.kind === "event" ? root.eventMeta(entry) : ""
                     color: Util.alpha(Color.menu.text, 0.5)
                     font.family: Style.font.menuFamily
                     font.pixelSize: Style.font.caption
@@ -531,9 +545,9 @@ BarWidget {
 
               MouseArea {
                 anchors.fill: parent
-                enabled: modelData.kind === "event" && String(modelData.event.url || "") !== ""
+                enabled: modelData.kind === "event" && String(entry.url || "") !== ""
                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                onClicked: root.openEvent(modelData.event.url)
+                onClicked: root.openEvent(entry.url)
               }
             }
           }
@@ -555,7 +569,7 @@ BarWidget {
         Text {
           width: parent.width
           textFormat: Text.PlainText
-          text: root.words("Pulsa R para actualizar · clic en un evento para abrir su enlace", "Press R to refresh · click an event to open its link")
+          text: root.words("R actualiza · clic en un evento abre su enlace", "R refreshes · click an event to open its link")
           color: Util.alpha(Color.menu.text, 0.32)
           font.family: Style.font.menuFamily
           font.pixelSize: Style.font.caption

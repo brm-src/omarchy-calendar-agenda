@@ -62,24 +62,24 @@ def property_value(line: str) -> tuple[str, dict[str, str], str]:
 
 
 def localize(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    # A naive datetime is local wall time; astimezone() applies that date's own DST offset.
     return value.astimezone()
 
 
 def parse_datetime(value: str, params: dict[str, str]) -> tuple[datetime, bool]:
     value = value.strip()
     if len(value) == 8 and value.isdigit():
-        return datetime.strptime(value, "%Y%m%d").replace(tzinfo=datetime.now().astimezone().tzinfo), True
+        return datetime.strptime(value, "%Y%m%d").astimezone(), True
     if value.endswith("Z"):
         return datetime.strptime(value, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc).astimezone(), False
     parsed = datetime.strptime(value, "%Y%m%dT%H%M%S")
     tzid = params.get("TZID")
     if tzid:
         try:
-            parsed = parsed.replace(tzinfo=ZoneInfo(tzid))
+            # Keep the named zone: recurrences must step in wall-clock time across DST.
+            return parsed.replace(tzinfo=ZoneInfo(tzid)), False
         except Exception:
-            parsed = parsed.replace(tzinfo=datetime.now().astimezone().tzinfo)
+            pass
     return localize(parsed), False
 
 
@@ -164,60 +164,89 @@ def event_link(values: dict[str, tuple[dict[str, str], str]]) -> str:
 
 def parse_events(text: str, now: datetime, horizon: date, calendar_name: str = "") -> list[dict[str, object]]:
     result: list[dict[str, object]] = []
-    current: dict[str, tuple[dict[str, str], str]] | None = None
+    vevents: list[dict] = []
+    current: dict | None = None
     for line in unfold(text):
         if line == "BEGIN:VEVENT":
-            current = {}
+            current = {"EXDATE": []}
         elif line == "END:VEVENT":
-            if not current or "DTSTART" not in current or current.get("STATUS", ({}, ""))[1].upper() == "CANCELLED":
-                current = None
-                continue
-            start_params, start_value = current["DTSTART"]
-            start, all_day = parse_datetime(start_value, start_params)
-            end: datetime | None = None
-            if "DTEND" in current:
-                end_params, end_value = current["DTEND"]
-                try:
-                    end, end_all_day = parse_datetime(end_value, end_params)
-                    if end_all_day != all_day or end <= start:
-                        end = None
-                except ValueError:
-                    end = None
-            if end is None and "DURATION" in current:
-                duration = parse_duration(current["DURATION"][1])
-                if duration and duration > timedelta(0):
-                    end = start + duration
-            rule = current.get("RRULE", ({}, ""))[1]
-            starts = occurrence_dates(start, rule, horizon) if rule else [start]
-            for occurrence in starts:
-                if end is not None:
-                    duration = end - start
-                    occurrence_end = occurrence + duration
-                    if not all_day and occurrence_end <= now:
-                        continue
-                else:
-                    occurrence_end = None
-                    if not all_day and occurrence < now:
-                        continue
-                for active_date in active_event_dates(occurrence, occurrence_end, all_day, horizon):
-                    if active_date.date() < now.date():
-                        continue
-                    day = "HOY" if active_date.date() == now.date() else "MAÑANA" if active_date.date() == now.date() + timedelta(days=1) else f"{WEEKDAYS[active_date.weekday()]} {active_date.day}"
-                    result.append({
-                        "date": active_date.date().isoformat(),
-                        "day": day,
-                        "time": "TODO EL DÍA" if all_day else occurrence.strftime("%H:%M"),
-                        "allDay": all_day,
-                        "calendar": calendar_name or _t("Calendario", "Calendar"),
-                        "location": unescape(current.get("LOCATION", ({}, ""))[1])[:512],
-                        "title": unescape(current.get("SUMMARY", ({}, ""))[1])[:512] or _t("Sin título", "Untitled"),
-                        "url": event_link(current),
-                        "sort": active_date.isoformat(),
-                    })
+            if current and "DTSTART" in current:
+                vevents.append(current)
             current = None
         elif current is not None and ":" in line:
             name, params, value = property_value(line)
-            current[name] = (params, value)
+            if name == "EXDATE":
+                current["EXDATE"].extend((params, item) for item in value.split(",") if item)
+            else:
+                current[name] = (params, value)
+
+    def moment(entry: tuple[dict[str, str], str]) -> datetime | None:
+        try:
+            return parse_datetime(*reversed(entry))[0]
+        except ValueError:
+            return None
+
+    # A RECURRENCE-ID event replaces (or cancels) one occurrence of its series;
+    # EXDATE removes one. Both must hide the series' own copy of that occurrence.
+    skipped: dict[str, set[datetime]] = {}
+    for event in vevents:
+        uid = event.get("UID", ({}, ""))[1]
+        hidden = skipped.setdefault(uid, set())
+        if "RECURRENCE-ID" in event:
+            hidden.add(moment(event["RECURRENCE-ID"]))
+        if "RRULE" in event:
+            hidden.update(moment(entry) for entry in event["EXDATE"])
+
+    for current in vevents:
+        if current.get("STATUS", ({}, ""))[1].upper() == "CANCELLED":
+            continue
+        hidden = skipped.get(current.get("UID", ({}, ""))[1], set()) if "RRULE" in current else set()
+        start_params, start_value = current["DTSTART"]
+        start, all_day = parse_datetime(start_value, start_params)
+        end: datetime | None = None
+        if "DTEND" in current:
+            end_params, end_value = current["DTEND"]
+            try:
+                end, end_all_day = parse_datetime(end_value, end_params)
+                if end_all_day != all_day or end <= start:
+                    end = None
+            except ValueError:
+                end = None
+        if end is None and "DURATION" in current:
+            duration = parse_duration(current["DURATION"][1])
+            if duration and duration > timedelta(0):
+                end = start + duration
+        rule = current.get("RRULE", ({}, ""))[1]
+        starts = occurrence_dates(start, rule, horizon) if rule else [start]
+        for occurrence in starts:
+            if occurrence in hidden:
+                continue
+            if not all_day:
+                occurrence = occurrence.astimezone()
+            if end is not None:
+                duration = end - start
+                occurrence_end = occurrence + duration
+                if not all_day and occurrence_end <= now:
+                    continue
+            else:
+                occurrence_end = None
+                if not all_day and occurrence < now:
+                    continue
+            for active_date in active_event_dates(occurrence, occurrence_end, all_day, horizon):
+                if active_date.date() < now.date():
+                    continue
+                day = "HOY" if active_date.date() == now.date() else "MAÑANA" if active_date.date() == now.date() + timedelta(days=1) else f"{WEEKDAYS[active_date.weekday()]} {active_date.day}"
+                result.append({
+                    "date": active_date.date().isoformat(),
+                    "day": day,
+                    "time": "TODO EL DÍA" if all_day else occurrence.strftime("%H:%M"),
+                    "allDay": all_day,
+                    "calendar": calendar_name or _t("Calendario", "Calendar"),
+                    "location": unescape(current.get("LOCATION", ({}, ""))[1])[:512],
+                    "title": unescape(current.get("SUMMARY", ({}, ""))[1])[:512] or _t("Sin título", "Untitled"),
+                    "url": event_link(current),
+                    "sort": active_date.isoformat(),
+                })
     result.sort(key=lambda item: str(item["sort"]))
     for item in result:
         item.pop("sort", None)
